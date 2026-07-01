@@ -8,7 +8,8 @@ repository.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-# Added incrementally: lopdf (PER-33), quick-xml/zip (PER-52), thiserror (PER-32).
+thiserror = { workspace = true }
+# Added incrementally: lopdf (PER-33), quick-xml/zip (PER-52).
 
 [dev-dependencies]
 serde_json = { workspace = true }
