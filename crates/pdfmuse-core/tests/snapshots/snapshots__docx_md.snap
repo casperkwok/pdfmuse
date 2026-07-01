@@ -1,0 +1,11 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_markdown(\"sample.docx\")"
+---
+# Report
+
+Intro paragraph.
+
+| Header | Header |
+| --- | --- |
+| a | b |

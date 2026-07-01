@@ -1,0 +1,108 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_json(\"sample.docx\")"
+---
+{
+  "metadata": {
+    "author": null,
+    "creator": null,
+    "keywords": null,
+    "page_count": 1,
+    "producer": null,
+    "subject": null,
+    "title": null
+  },
+  "outline": [],
+  "pages": [
+    {
+      "blocks": [
+        {
+          "Paragraph": {
+            "bbox": {
+              "x0": 0.0,
+              "x1": 0.0,
+              "y0": 0.0,
+              "y1": 0.0
+            },
+            "heading_level": 1,
+            "text": "Report"
+          }
+        },
+        {
+          "Paragraph": {
+            "bbox": {
+              "x0": 0.0,
+              "x1": 0.0,
+              "y0": 0.0,
+              "y1": 0.0
+            },
+            "heading_level": null,
+            "text": "Intro paragraph."
+          }
+        },
+        {
+          "Table": {
+            "bbox": {
+              "x0": 0.0,
+              "x1": 0.0,
+              "y0": 0.0,
+              "y1": 0.0
+            },
+            "rows": [
+              [
+                {
+                  "bbox": {
+                    "x0": 0.0,
+                    "x1": 0.0,
+                    "y0": 0.0,
+                    "y1": 0.0
+                  },
+                  "col_span": 2,
+                  "row_span": 1,
+                  "text": "Header"
+                }
+              ],
+              [
+                {
+                  "bbox": {
+                    "x0": 0.0,
+                    "x1": 0.0,
+                    "y0": 0.0,
+                    "y1": 0.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "a"
+                },
+                {
+                  "bbox": {
+                    "x0": 0.0,
+                    "x1": 0.0,
+                    "y0": 0.0,
+                    "y1": 0.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "b"
+                }
+              ]
+            ],
+            "source": "Docx"
+          }
+        }
+      ],
+      "chars": [],
+      "height": 0.0,
+      "images": [],
+      "index": 0,
+      "lines": [],
+      "links": [],
+      "rects": [],
+      "rotation": 0,
+      "rules": [],
+      "width": 0.0
+    }
+  ],
+  "source": "Docx",
+  "warnings": []
+}

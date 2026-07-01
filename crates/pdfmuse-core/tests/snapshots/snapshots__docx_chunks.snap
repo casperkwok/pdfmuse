@@ -1,0 +1,45 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_chunks(\"sample.docx\")"
+---
+[
+  {
+    "bbox": {
+      "x0": 0.0,
+      "x1": 0.0,
+      "y0": 0.0,
+      "y1": 0.0
+    },
+    "heading_path": [
+      "Report"
+    ],
+    "page": 0,
+    "text": "Report"
+  },
+  {
+    "bbox": {
+      "x0": 0.0,
+      "x1": 0.0,
+      "y0": 0.0,
+      "y1": 0.0
+    },
+    "heading_path": [
+      "Report"
+    ],
+    "page": 0,
+    "text": "Intro paragraph."
+  },
+  {
+    "bbox": {
+      "x0": 0.0,
+      "x1": 0.0,
+      "y0": 0.0,
+      "y1": 0.0
+    },
+    "heading_path": [
+      "Report"
+    ],
+    "page": 0,
+    "text": "Header\na | b"
+  }
+]

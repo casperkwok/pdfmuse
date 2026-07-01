@@ -18,7 +18,7 @@ import pdfmuse._native as native
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "tests" / "corpus"
-FILES = ["hello.pdf", "table.pdf", "cjk.pdf"]
+FILES = ["hello.pdf", "table.pdf", "cjk.pdf", "sample.docx"]
 
 
 def main() -> int:

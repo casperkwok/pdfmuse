@@ -41,6 +41,18 @@ fn snapshot_json(name: &str) -> String {
     serde_json::to_string_pretty(&value).expect("to_string")
 }
 
+fn snapshot_markdown(name: &str) -> String {
+    let doc = pdfmuse_core::parse(&corpus(name), None).expect("parse fixture");
+    pdfmuse_core::to_markdown(&doc)
+}
+
+fn snapshot_chunks(name: &str) -> String {
+    let doc = pdfmuse_core::parse(&corpus(name), None).expect("parse fixture");
+    let mut value = serde_json::to_value(pdfmuse_core::chunk(&doc)).expect("to_value");
+    round_floats(&mut value);
+    serde_json::to_string_pretty(&value).expect("to_string")
+}
+
 #[test]
 fn snapshot_hello_single_column() {
     insta::assert_snapshot!("hello", snapshot_json("hello.pdf"));
@@ -54,4 +66,27 @@ fn snapshot_table_ruled() {
 #[test]
 fn snapshot_cjk_type0() {
     insta::assert_snapshot!("cjk", snapshot_json("cjk.pdf"));
+}
+
+// --- M3: DOCX + output layer ---
+
+#[test]
+fn snapshot_docx_ir() {
+    insta::assert_snapshot!("docx", snapshot_json("sample.docx"));
+}
+
+#[test]
+fn snapshot_docx_markdown() {
+    insta::assert_snapshot!("docx_md", snapshot_markdown("sample.docx"));
+}
+
+#[test]
+fn snapshot_docx_chunks() {
+    // Chunk metadata: heading_path + page; the table is a single chunk.
+    insta::assert_snapshot!("docx_chunks", snapshot_chunks("sample.docx"));
+}
+
+#[test]
+fn snapshot_table_markdown() {
+    insta::assert_snapshot!("table_md", snapshot_markdown("table.pdf"));
 }

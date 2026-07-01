@@ -1,0 +1,7 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_markdown(\"table.pdf\")"
+---
+| A | B |
+| --- | --- |
+| C | D |
