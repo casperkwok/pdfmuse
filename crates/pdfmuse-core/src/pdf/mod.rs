@@ -1,38 +1,49 @@
 //! PDF parsing.
 //!
-//! M0 is a **naive path**: lopdf loads the object tree and `extract_text` pulls
-//! plain text (one paragraph per page, no coordinates). The real value — a
-//! self-written content-stream interpreter that emits chars with precise bboxes —
-//! replaces this in PER-36; the malformed-object validation pass (`objects.rs`)
-//! arrives in PER-38.
+//! M0 is a **naive path**: lopdf loads the object tree ([`objects`]) and
+//! `extract_text` pulls plain text (one paragraph per page, no coordinates). The
+//! real value — a self-written content-stream interpreter that emits chars with
+//! precise bboxes — replaces the text step in PER-36, building on the page
+//! accessors in [`objects`].
+
+mod objects;
 
 use crate::error::{PdfmuseError, Result};
 use crate::ir::{BBox, Block, Document, Metadata, Page, Paragraph, SourceKind, Warning, WarningKind};
+use objects::PdfDoc;
 
-/// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text`; leaves
-/// `chars`/`lines` empty until the content-stream interpreter (PER-36) lands.
+/// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text` and page
+/// dimensions from the MediaBox; leaves `chars`/`lines` empty until the
+/// content-stream interpreter (PER-36) lands.
 pub(crate) fn parse_pdf(data: &[u8]) -> Result<Document> {
-    let doc = lopdf::Document::load_mem(data).map_err(|e| PdfmuseError::Malformed(e.to_string()))?;
+    let (pdf, warnings) = PdfDoc::load(data)?;
 
     // Encrypted documents need a password — support arrives in PER-50. The
     // password (once supported) is never logged.
-    if doc.trailer.get(b"Encrypt").is_ok() {
+    if pdf.is_encrypted() {
         return Err(PdfmuseError::EncryptedNoPassword);
     }
 
-    let pages = doc.get_pages();
+    let pages = pdf.pages();
     let mut out = Document {
         source: SourceKind::Pdf,
         metadata: Metadata { page_count: pages.len() as u32, ..Default::default() },
+        warnings, // dangling refs / undecodable streams surfaced by the validation pass
         ..Default::default()
     };
 
-    for (page_number, _object_id) in pages {
+    for (page_number, page_id) in pages {
         // lopdf page numbers are 1-based; the IR is 0-based.
         let index = page_number.saturating_sub(1);
         let mut page = Page { index, ..Default::default() };
 
-        match doc.extract_text(&[page_number]) {
+        // Page dimensions from the (possibly inherited) MediaBox.
+        if let Some([x0, y0, x1, y1]) = pdf.media_box(page_id) {
+            page.width = (x1 - x0).abs();
+            page.height = (y1 - y0).abs();
+        }
+
+        match pdf.inner.extract_text(&[page_number]) {
             Ok(text) => {
                 let text = text.trim();
                 if !text.is_empty() {
@@ -112,6 +123,8 @@ mod tests {
         assert_eq!(doc.source, SourceKind::Pdf);
         assert_eq!(doc.pages.len(), 1);
         assert_eq!(doc.metadata.page_count, 1);
+        assert!(doc.warnings.is_empty(), "unexpected warnings: {:?}", doc.warnings);
+        assert_eq!((doc.pages[0].width, doc.pages[0].height), (612.0, 792.0));
 
         let text: String = doc.pages[0]
             .blocks
