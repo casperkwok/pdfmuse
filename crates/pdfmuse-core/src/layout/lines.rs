@@ -11,15 +11,18 @@ const BASELINE_TOL: f32 = 0.3;
 /// Gap (fraction of font size) above which a space is inserted between chars.
 const SPACE_GAP: f32 = 0.25;
 
-/// Cluster `chars` into text lines. Order is deterministic: top-to-bottom, then
-/// left-to-right.
-pub(super) fn cluster_lines(chars: &[Char]) -> Vec<TextLine> {
-    if chars.is_empty() {
+/// Cluster `chars` into text lines. `skip[i] == true` excludes char `i` (e.g. it
+/// belongs to a table). Order is deterministic: top-to-bottom, then left-to-right.
+pub(super) fn cluster_lines(chars: &[Char], skip: &[bool]) -> Vec<TextLine> {
+    // Keep original indices so TextLine.chars still points into `page.chars`.
+    let mut order: Vec<usize> = (0..chars.len())
+        .filter(|&i| !skip.get(i).copied().unwrap_or(false))
+        .collect();
+    if order.is_empty() {
         return Vec::new();
     }
 
     // Order by baseline (y1), then x, so line members are adjacent.
-    let mut order: Vec<usize> = (0..chars.len()).collect();
     order.sort_by(|&a, &b| {
         cmp(chars[a].bbox.y1, chars[b].bbox.y1).then(cmp(chars[a].bbox.x0, chars[b].bbox.x0))
     });
@@ -102,7 +105,7 @@ mod tests {
             ch("i", 6.0, 10.0, 100.0, 10.0),
             ch("there", 20.0, 45.0, 100.0, 10.0),
         ];
-        let lines = cluster_lines(&chars);
+        let lines = cluster_lines(&chars, &vec![false; chars.len()]);
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].text, "Hi there");
         assert_eq!(lines[0].chars, vec![0, 1, 2]);
@@ -115,7 +118,7 @@ mod tests {
             ch("world", 0.0, 30.0, 120.0, 10.0), // lower line
             ch("hello", 0.0, 30.0, 100.0, 10.0), // upper line
         ];
-        let lines = cluster_lines(&chars);
+        let lines = cluster_lines(&chars, &vec![false; chars.len()]);
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].text, "hello"); // smaller y = higher = first
         assert_eq!(lines[1].text, "world");
@@ -123,6 +126,6 @@ mod tests {
 
     #[test]
     fn empty_input_yields_no_lines() {
-        assert!(cluster_lines(&[]).is_empty());
+        assert!(cluster_lines(&[], &[]).is_empty());
     }
 }
