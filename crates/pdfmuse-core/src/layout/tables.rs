@@ -129,8 +129,10 @@ fn has_seg(segs: &[Seg], pos: f32, lo: f32, hi: f32) -> bool {
     segs.iter().any(|s| (s.pos - pos).abs() <= EPS && s.lo <= lo + EPS && s.hi >= hi - EPS)
 }
 
-/// Concatenate the chars whose center falls in `cell`, left-to-right, inserting
-/// spaces on wide gaps (same rule as line building).
+/// Concatenate the chars whose center falls in `cell`, **reading order**: lines
+/// top-to-bottom (by baseline), each line left-to-right. Ordering by x alone
+/// would interleave a multi-line cell into gibberish, so we sort by baseline
+/// first and insert a space at each line break and wide intra-line gap.
 fn cell_text(chars: &[Char], cell: BBox) -> String {
     let mut inside: Vec<&Char> = chars
         .iter()
@@ -140,18 +142,20 @@ fn cell_text(chars: &[Char], cell: BBox) -> String {
             cx >= cell.x0 && cx <= cell.x1 && cy >= cell.y0 && cy <= cell.y1
         })
         .collect();
-    inside.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+    inside.sort_by(|a, b| a.bbox.y1.total_cmp(&b.bbox.y1).then(a.bbox.x0.total_cmp(&b.bbox.x0)));
 
     let mut text = String::new();
-    let mut prev_x1: Option<f32> = None;
+    let mut prev: Option<&Char> = None;
     for c in inside {
-        if let Some(px1) = prev_x1 {
-            if c.bbox.x0 - px1 > SPACE_GAP * c.size.max(1.0) {
+        if let Some(p) = prev {
+            let size = c.size.max(1.0);
+            let new_line = (c.bbox.y1 - p.bbox.y1).abs() > 0.5 * size;
+            if new_line || c.bbox.x0 - p.bbox.x1 > SPACE_GAP * size {
                 text.push(' ');
             }
         }
         text.push_str(&c.text);
-        prev_x1 = Some(c.bbox.x1);
+        prev = Some(c);
     }
     text
 }
