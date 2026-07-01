@@ -8,6 +8,7 @@
 
 mod content;
 mod fonts;
+mod graphics;
 mod objects;
 mod tables;
 
@@ -46,10 +47,13 @@ pub(crate) fn parse_pdf(data: &[u8]) -> Result<Document> {
             page.height = (y1 - y0).abs();
         }
 
-        // Self-written content-stream interpreter → chars with precise bboxes.
-        let (chars, mut page_warnings) = content::extract_page(&pdf, page_id, index, page.height);
-        page.chars = chars;
-        out.warnings.append(&mut page_warnings);
+        // Self-written content-stream interpreter → chars with precise bboxes
+        // plus vector rects/rules.
+        let mut pc = content::extract_page(&pdf, page_id, index, page.height);
+        page.chars = pc.chars;
+        page.rects = pc.rects;
+        page.rules = pc.rules;
+        out.warnings.append(&mut pc.warnings);
 
         out.pages.push(page);
     }
@@ -127,5 +131,44 @@ mod tests {
         assert!(first.bbox.y1 > first.bbox.y0, "bbox should have positive height");
         // Courier is monospace 600/1000 em → 14.4pt advance; 'e' is the 2nd char.
         assert!((chars[1].bbox.x0 - 114.4).abs() < 0.5, "second glyph x0 = {}", chars[1].bbox.x0);
+    }
+
+    /// A one-page PDF whose content stream draws a single stroked rectangle.
+    fn sample_pdf_with_rect() -> Vec<u8> {
+        let mut doc = LoDoc::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let content = Content {
+            operations: vec![
+                Operation::new("re", vec![100.into(), 100.into(), 200.into(), 50.into()]),
+                Operation::new("S", vec![]),
+            ],
+        };
+        let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "Contents" => content_id,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+        let pages = dictionary! { "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 };
+        doc.objects.insert(pages_id, Object::Dictionary(pages));
+        let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        doc.trailer.set("Root", catalog_id);
+        let mut buf = Vec::new();
+        doc.save_to(&mut buf).unwrap();
+        buf
+    }
+
+    #[test]
+    fn collects_vector_rectangles() {
+        let doc = parse_pdf(&sample_pdf_with_rect()).expect("parses");
+        let rects = &doc.pages[0].rects;
+        assert_eq!(rects.len(), 1);
+        // "re 100 100 200 50" → user corners (100,100)-(300,150); identity CTM.
+        // Y flips on a 792-high page: y_user 100→692, 150→642.
+        let b = rects[0].bbox;
+        assert!((b.x0 - 100.0).abs() < 0.5, "x0 = {}", b.x0);
+        assert!((b.x1 - 300.0).abs() < 0.5, "x1 = {}", b.x1);
+        assert!((b.y0 - 642.0).abs() < 0.5 && (b.y1 - 692.0).abs() < 0.5, "y = {},{}", b.y0, b.y1);
     }
 }

@@ -1,15 +1,16 @@
 //! Content-stream interpreter — **the core value of pdfmuse**.
 //!
-//! Walks a page's content-stream operators, maintaining the graphics CTM stack
-//! and the text state (text matrix, font, spacing), and emits [`Char`]s with
-//! precise, normalized bounding boxes. This replaces the M0 naive `extract_text`
-//! path. Operator tokenizing is delegated to lopdf (`Content::decode`); the
-//! interpretation (matrices, placement, bboxes) is ours.
+//! Walks a page's content-stream operators, maintaining the graphics state (CTM,
+//! line width) and text state (text matrix, font, spacing), and emits [`Char`]s
+//! with precise, normalized bounding boxes plus the vector [`Rect`]/[`Rule`]
+//! geometry that feeds table reconstruction. Operator tokenizing is delegated to
+//! lopdf (`Content::decode`); the interpretation (matrices, placement, bboxes) is
+//! ours.
 //!
-//! M1 scope: simple (Type1/TrueType) Latin fonts. CID/Type0 fonts are flagged by
-//! [`super::fonts::Font::is_cid`] and reported as a `MissingCMap` warning; real
-//! CJK handling lands in M2. Glyph ink height is approximated as one em above the
-//! baseline (font descriptor ascent/descent refinement is future work).
+//! M1 scope: simple (Type1/TrueType) Latin fonts; straight path segments and
+//! rectangles (Bézier curves advance the point but are not emitted). CID/Type0
+//! fonts are flagged via [`super::fonts::Font::is_cid`] and reported as a
+//! `MissingCMap` warning; real CJK handling lands in M2.
 
 use std::collections::BTreeMap;
 
@@ -17,12 +18,21 @@ use lopdf::content::Content;
 use lopdf::{Object, ObjectId};
 
 use super::fonts::Font;
+use super::graphics;
 use super::objects::PdfDoc;
-use crate::ir::{BBox, Char, FontRef, Warning, WarningKind};
+use crate::ir::{BBox, Char, FontRef, Rect, Rule, Warning, WarningKind};
 
 const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
 
-/// Interpret a page's content stream into positioned characters.
+/// Everything the interpreter extracts from one page.
+pub(crate) struct PageContent {
+    pub chars: Vec<Char>,
+    pub rects: Vec<Rect>,
+    pub rules: Vec<Rule>,
+    pub warnings: Vec<Warning>,
+}
+
+/// Interpret a page's content stream.
 ///
 /// `page_height` (PDF points) flips PDF's bottom-left origin to the IR's
 /// top-left, Y-down convention.
@@ -31,40 +41,85 @@ pub(crate) fn extract_page(
     page_id: ObjectId,
     page_index: u32,
     page_height: f32,
-) -> (Vec<Char>, Vec<Warning>) {
-    let mut chars = Vec::new();
-    let mut warnings = Vec::new();
+) -> PageContent {
+    let mut out = PageContent { chars: Vec::new(), rects: Vec::new(), rules: Vec::new(), warnings: Vec::new() };
 
     let bytes = match pdf.content_bytes(page_id) {
         Ok(b) => b,
         Err(e) => {
-            warnings.push(warn(page_index, format!("content stream unreadable: {e}")));
-            return (chars, warnings);
+            out.warnings.push(warn(page_index, format!("content stream unreadable: {e}")));
+            return out;
         }
     };
     let ops = match Content::decode(&bytes) {
         Ok(c) => c.operations,
         Err(e) => {
-            warnings.push(warn(page_index, format!("content stream failed to decode: {e}")));
-            return (chars, warnings);
+            out.warnings.push(warn(page_index, format!("content stream failed to decode: {e}")));
+            return out;
         }
     };
 
     let fonts = build_fonts(pdf, page_id);
-    let mut st = TextState::default();
-    let mut ctm_stack: Vec<[f32; 6]> = Vec::new();
+    let mut st = GraphicsState::default();
+    let mut stack: Vec<GraphicsState> = Vec::new();
+    let mut path = Path::default();
     let mut warned_cid = false;
 
     for op in &ops {
         let a = &op.operands;
         match op.operator.as_str() {
-            "q" => ctm_stack.push(st.ctm),
+            // --- graphics state ---
+            "q" => stack.push(st.clone()),
             "Q" => {
-                if let Some(ctm) = ctm_stack.pop() {
-                    st.ctm = ctm;
+                if let Some(s) = stack.pop() {
+                    st = s;
                 }
             }
             "cm" => st.ctm = mul(mat6(a), st.ctm),
+            "w" => st.line_width = num(a, 0),
+
+            // --- path construction ---
+            "m" => {
+                let p = (num(a, 0), num(a, 1));
+                path.cur = Some(p);
+                path.start = Some(p);
+            }
+            "l" => {
+                let p = (num(a, 0), num(a, 1));
+                if let Some(prev) = path.cur {
+                    if let Some(r) = graphics::make_rule(apply(&st.ctm, prev.0, prev.1), apply(&st.ctm, p.0, p.1), st.line_width, page_height) {
+                        out.rules.push(r);
+                    }
+                }
+                path.cur = Some(p);
+            }
+            "re" => {
+                let (x, y, w, h) = (num(a, 0), num(a, 1), num(a, 2), num(a, 3));
+                let corners = [
+                    apply(&st.ctm, x, y),
+                    apply(&st.ctm, x + w, y),
+                    apply(&st.ctm, x, y + h),
+                    apply(&st.ctm, x + w, y + h),
+                ];
+                out.rects.push(graphics::make_rect(corners, page_height));
+                path.cur = Some((x, y));
+                path.start = Some((x, y));
+            }
+            // Bézier curves: advance the current point, don't emit (M1).
+            "c" => path.cur = Some((num(a, 4), num(a, 5))),
+            "v" | "y" => path.cur = Some((num(a, 2), num(a, 3))),
+            "h" => {
+                if let (Some(cur), Some(start)) = (path.cur, path.start) {
+                    if let Some(r) = graphics::make_rule(apply(&st.ctm, cur.0, cur.1), apply(&st.ctm, start.0, start.1), st.line_width, page_height) {
+                        out.rules.push(r);
+                    }
+                }
+                path.cur = path.start;
+            }
+            // Path painting / clipping ends the current path.
+            "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => path = Path::default(),
+
+            // --- text object ---
             "BT" => {
                 st.tm = IDENTITY;
                 st.tlm = IDENTITY;
@@ -89,32 +144,24 @@ pub(crate) fn extract_page(
             "Tw" => st.word_spacing = num(a, 0),
             "Tz" => st.h_scale = num(a, 0) / 100.0,
             "Ts" => st.rise = num(a, 0),
-            "Tj" => {
-                if let Some(s) = string_bytes(a.first()) {
-                    show(s, &mut st, &fonts, page_height, &mut chars, &mut warnings, page_index, &mut warned_cid);
-                }
-            }
+            "Tj" => show_operand(a.first(), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
             "'" => {
                 st.line_move(0.0, -st.leading);
-                if let Some(s) = string_bytes(a.first()) {
-                    show(s, &mut st, &fonts, page_height, &mut chars, &mut warnings, page_index, &mut warned_cid);
-                }
+                show_operand(a.first(), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid);
             }
             "\"" => {
                 st.word_spacing = num(a, 0);
                 st.char_spacing = num(a, 1);
                 st.line_move(0.0, -st.leading);
-                if let Some(s) = string_bytes(a.get(2)) {
-                    show(s, &mut st, &fonts, page_height, &mut chars, &mut warnings, page_index, &mut warned_cid);
-                }
+                show_operand(a.get(2), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid);
             }
             "TJ" => {
                 if let Some(Object::Array(items)) = a.first() {
                     for item in items {
                         match item {
-                            Object::String(s, _) => show(s, &mut st, &fonts, page_height, &mut chars, &mut warnings, page_index, &mut warned_cid),
+                            Object::String(s, _) => show(s, &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
                             other => {
-                                // Positive numbers move left (tighten); PDF: subtract /1000 * fs.
+                                // Positive numbers move left (tighten): subtract /1000 * fs.
                                 let adj = -number(other) / 1000.0 * st.font_size * st.h_scale;
                                 st.tm = mul([1.0, 0.0, 0.0, 1.0, adj, 0.0], st.tm);
                             }
@@ -126,13 +173,14 @@ pub(crate) fn extract_page(
         }
     }
 
-    (chars, warnings)
+    out
 }
 
-/// Text state carried through the interpreter.
+/// Combined graphics + text state carried through the interpreter.
 #[derive(Clone)]
-struct TextState {
+struct GraphicsState {
     ctm: [f32; 6],
+    line_width: f32,
     tm: [f32; 6],
     tlm: [f32; 6],
     font: Option<Vec<u8>>,
@@ -144,10 +192,11 @@ struct TextState {
     rise: f32,
 }
 
-impl Default for TextState {
+impl Default for GraphicsState {
     fn default() -> Self {
-        TextState {
+        GraphicsState {
             ctm: IDENTITY,
+            line_width: 1.0,
             tm: IDENTITY,
             tlm: IDENTITY,
             font: None,
@@ -161,7 +210,7 @@ impl Default for TextState {
     }
 }
 
-impl TextState {
+impl GraphicsState {
     /// `Td`: move to the start of the next line, offset (tx, ty) from the line matrix.
     fn line_move(&mut self, tx: f32, ty: f32) {
         self.tlm = mul([1.0, 0.0, 0.0, 1.0, tx, ty], self.tlm);
@@ -169,14 +218,33 @@ impl TextState {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn show(
-    bytes: &[u8],
-    st: &mut TextState,
+/// Current path-construction state.
+#[derive(Default)]
+struct Path {
+    cur: Option<(f32, f32)>,
+    start: Option<(f32, f32)>,
+}
+
+fn show_operand(
+    o: Option<&Object>,
+    st: &mut GraphicsState,
     fonts: &BTreeMap<Vec<u8>, Font>,
     page_height: f32,
-    chars: &mut Vec<Char>,
-    warnings: &mut Vec<Warning>,
+    out: &mut PageContent,
+    page_index: u32,
+    warned_cid: &mut bool,
+) {
+    if let Some(Object::String(s, _)) = o {
+        show(s, st, fonts, page_height, out, page_index, warned_cid);
+    }
+}
+
+fn show(
+    bytes: &[u8],
+    st: &mut GraphicsState,
+    fonts: &BTreeMap<Vec<u8>, Font>,
+    page_height: f32,
+    out: &mut PageContent,
     page_index: u32,
     warned_cid: &mut bool,
 ) {
@@ -186,7 +254,7 @@ fn show(
     };
     if font.is_cid {
         if !*warned_cid {
-            warnings.push(Warning {
+            out.warnings.push(Warning {
                 page: Some(page_index),
                 kind: WarningKind::MissingCMap,
                 detail: format!("CID font '{}' not yet supported (M2)", font.base),
@@ -220,7 +288,7 @@ fn show(
                     x1 = x1.max(x);
                     y1 = y1.max(y);
                 }
-                chars.push(Char {
+                out.chars.push(Char {
                     text: t.to_string(),
                     bbox: BBox { x0, y0, x1, y1 },
                     font: FontRef { name: font.base.clone() },
@@ -301,13 +369,6 @@ fn number(o: &Object) -> f32 {
 fn name_bytes(o: Option<&Object>) -> Option<Vec<u8>> {
     match o {
         Some(Object::Name(n)) => Some(n.clone()),
-        _ => None,
-    }
-}
-
-fn string_bytes(o: Option<&Object>) -> Option<&[u8]> {
-    match o {
-        Some(Object::String(s, _)) => Some(s),
         _ => None,
     }
 }
