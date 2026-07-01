@@ -1,10 +1,20 @@
 [package]
 name = "pdfmuse-python"
-description = "pdfmuse binding shell — PyO3 + maturin, see PER-34"
+description = "Python (PyO3) binding for pdfmuse."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+# cdylib for the native extension. Name is remapped by maturin (module-name).
+crate-type = ["cdylib"]
+
 [dependencies]
 pdfmuse-core = { path = "../pdfmuse-core" }
+serde_json = { workspace = true }
+
+[dependencies.pyo3]
+version = "0.23"
+# abi3-py38: one wheel covers CPython >= 3.8. extension-module: don't link libpython.
+features = ["abi3-py38", "extension-module"]

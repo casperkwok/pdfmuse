@@ -31,16 +31,20 @@ Before adding anything to the core, ask: *does this move us toward a layout mode
 ## Common commands
 
 ```bash
-cargo build                 # build workspace
-cargo test                  # unit + snapshot tests
-cargo clippy --all-targets  # lint (keep clean)
-cargo run -p pdfmuse-cli -- parse <file>   # debug dump (once PER-44 lands)
+cargo build                 # builds core + cli (default-members; NOT the binding cdylibs)
+cargo test                  # unit + snapshot tests (core)
+cargo clippy --workspace --all-targets   # lint everything (clippy doesn't link, so binding crates are fine)
+cargo run -p pdfmuse-cli -- parse <file>  # debug dump (once PER-44 lands)
 
-# Bindings (later milestones):
-maturin develop             # build+install Python binding locally (PER-34)
+# Binding crates are cdylibs built by their packaging tools, NOT `cargo build`
+# (extension-module needs linker flags maturin/napi set). Do not `cargo build -p pdfmuse-python`.
+maturin develop             # build+install Python binding into the active venv (PER-34)
 napi build --platform       # build Node .node (PER-48)
 wasm-pack build crates/pdfmuse-wasm --target web   # WASM (PER-59)
 ```
+
+Python dev loop: `uv venv .venv && uv pip install -p .venv maturin`, then with the venv
+active `maturin develop` installs `pdfmuse` editable; `import pdfmuse` works.
 
 ## Testing gates (once built)
 

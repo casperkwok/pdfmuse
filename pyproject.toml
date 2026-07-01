@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pdfmuse"
+description = "Deterministic PDF/DOCX parser for RAG — Rust core, Python & TS bindings"
+requires-python = ">=3.8"
+license = "MIT OR Apache-2.0"
+dynamic = ["version"]
+readme = "README.md"
+keywords = ["pdf", "docx", "parser", "rag", "llm"]
+
+[tool.maturin]
+manifest-path = "crates/pdfmuse-python/Cargo.toml"
+python-source = "bindings/python"   # pure-Python wrapper (types, dataclasses)
+module-name = "pdfmuse._native"     # native module lives under the pdfmuse package

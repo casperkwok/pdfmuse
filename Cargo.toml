@@ -1,5 +1,10 @@
 [workspace]
 members = ["crates/*"]
+# Plain `cargo build`/`test` targets only the pure-Rust crates. The binding
+# crates (python/node/wasm) are cdylibs built by their packaging tools
+# (maturin / napi / wasm-pack), which set the linker flags a plain `cargo build`
+# does not — so they are excluded from the default set to keep `cargo build` green.
+default-members = ["crates/pdfmuse-core", "crates/pdfmuse-cli"]
 resolver = "2"
 
 [workspace.package]
