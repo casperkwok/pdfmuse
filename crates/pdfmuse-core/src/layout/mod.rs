@@ -7,10 +7,12 @@
 //! tables (PER-43).
 
 mod lines;
+mod paragraphs;
 
 use crate::ir::Page;
 
 /// Populate a page's layered structure from its `chars`.
 pub(crate) fn layout_page(page: &mut Page) {
     page.lines = lines::cluster_lines(&page.chars);
+    page.blocks = paragraphs::group_paragraphs(&page.lines);
 }
