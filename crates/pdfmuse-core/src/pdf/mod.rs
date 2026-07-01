@@ -8,6 +8,7 @@
 
 mod cmap;
 mod content;
+mod content_lex;
 mod fonts;
 mod graphics;
 mod objects;

@@ -15,10 +15,10 @@
 
 use std::collections::BTreeMap;
 
-use lopdf::content::Content;
 use lopdf::{Object, ObjectId};
 use unicode_normalization::UnicodeNormalization;
 
+use super::content_lex::{Lexer, Operand, Token};
 use super::fonts::Font;
 use super::graphics;
 use super::objects::PdfDoc;
@@ -83,14 +83,6 @@ pub(crate) fn extract_page(
             return out;
         }
     };
-    let ops = match Content::decode(&bytes) {
-        Ok(c) => c.operations,
-        Err(e) => {
-            out.warnings.push(warn(page_index, format!("content stream failed to decode: {e}")));
-            return out;
-        }
-    };
-
     let fonts = build_fonts(pdf, page_id);
     let mut st = GraphicsState::default();
     let mut stack: Vec<GraphicsState> = Vec::new();
@@ -102,9 +94,18 @@ pub(crate) fn extract_page(
     let mut pending_rules: Vec<Rule> = Vec::new();
     let mut warned_cid = false;
 
-    for op in &ops {
-        let a = &op.operands;
-        match op.operator.as_str() {
+    let mut lex = Lexer::new(&bytes);
+    let mut operands: Vec<Operand> = Vec::new();
+    while let Some(tok) = lex.next() {
+        let kw = match tok {
+            Token::Operand(o) => {
+                operands.push(o);
+                continue;
+            }
+            Token::Operator(kw) => kw,
+        };
+        let a: &[Operand] = &operands;
+        match std::str::from_utf8(kw).unwrap_or("") {
             // --- graphics state ---
             "q" => stack.push(st.clone()),
             "Q" => {
@@ -203,21 +204,25 @@ pub(crate) fn extract_page(
                 show_operand(a.get(2), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid);
             }
             "TJ" => {
-                if let Some(Object::Array(items)) = a.first() {
+                if let Some(Operand::Array(items)) = a.first() {
                     for item in items {
                         match item {
-                            Object::String(s, _) => show(s, &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
-                            other => {
+                            Operand::Str(s) => show(s, &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
+                            Operand::Num(n) => {
                                 // Positive numbers move left (tighten): subtract /1000 * fs.
-                                let adj = -number(other) / 1000.0 * st.font_size * st.h_scale;
+                                let adj = -n / 1000.0 * st.font_size * st.h_scale;
                                 st.tm = mul([1.0, 0.0, 0.0, 1.0, adj, 0.0], st.tm);
                             }
+                            _ => {}
                         }
                     }
                 }
             }
+            // Inline image: skip the BI..ID..EI binary payload so it is not tokenized.
+            "BI" => lex.skip_inline_image(),
             _ => {}
         }
+        operands.clear();
     }
 
     out
@@ -273,7 +278,7 @@ struct Path {
 }
 
 fn show_operand(
-    o: Option<&Object>,
+    o: Option<&Operand>,
     st: &mut GraphicsState,
     fonts: &BTreeMap<Vec<u8>, Font>,
     page_height: f32,
@@ -281,7 +286,7 @@ fn show_operand(
     page_index: u32,
     warned_cid: &mut bool,
 ) {
-    if let Some(Object::String(s, _)) = o {
+    if let Some(Operand::Str(s)) = o {
         show(s, st, fonts, page_height, out, page_index, warned_cid);
     }
 }
@@ -407,25 +412,20 @@ fn apply(m: &[f32; 6], x: f32, y: f32) -> (f32, f32) {
     (m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5])
 }
 
-fn mat6(ops: &[Object]) -> [f32; 6] {
+fn mat6(ops: &[Operand]) -> [f32; 6] {
     [num(ops, 0), num(ops, 1), num(ops, 2), num(ops, 3), num(ops, 4), num(ops, 5)]
 }
 
-fn num(ops: &[Object], i: usize) -> f32 {
-    ops.get(i).map(number).unwrap_or(0.0)
-}
-
-fn number(o: &Object) -> f32 {
-    match o {
-        Object::Integer(i) => *i as f32,
-        Object::Real(r) => *r,
+fn num(ops: &[Operand], i: usize) -> f32 {
+    match ops.get(i) {
+        Some(Operand::Num(n)) => *n,
         _ => 0.0,
     }
 }
 
-fn name_bytes(o: Option<&Object>) -> Option<Vec<u8>> {
+fn name_bytes(o: Option<&Operand>) -> Option<Vec<u8>> {
     match o {
-        Some(Object::Name(n)) => Some(n.clone()),
+        Some(Operand::Name(n)) => Some(n.clone()),
         _ => None,
     }
 }
