@@ -141,6 +141,8 @@ pub enum TableSource {
     Ruled,
     /// Built from whitespace-aligned text columns (only above a confidence threshold).
     Whitespace,
+    /// Explicit table structure from a DOCX `w:tbl`.
+    Docx,
 }
 
 /// A single table cell, possibly spanning rows/columns.
