@@ -136,16 +136,13 @@ fn scan(doc: &LoDoc, owner: ObjectId, obj: &Object, out: &mut Vec<Warning>) {
         Object::Array(items) => items.iter().for_each(|it| scan(doc, owner, it, out)),
         Object::Dictionary(d) => d.iter().for_each(|(_, v)| scan(doc, owner, v, out)),
         Object::Stream(s) => {
+            // Only check references in the stream dict. Decoding every stream to
+            // validate it is expensive (a large image/font program per object) and
+            // pointless: we never consume image data or glyph programs, image
+            // codecs (DCTDecode/JPX) can't be flate-decoded so they'd false-flag,
+            // and content-stream decode failures are already reported by the
+            // interpreter where they actually cost text.
             s.dict.iter().for_each(|(_, v)| scan(doc, owner, v, out));
-            // Only a declared filter that fails to decode is a real problem;
-            // an uncompressed stream has nothing to decode (and lopdf's
-            // `decompressed_content` errors on it), so don't flag that.
-            if s.dict.get(b"Filter").is_ok() && s.decompressed_content().is_err() {
-                out.push(malformed(format!(
-                    "object {}:{} stream failed to decode",
-                    owner.0, owner.1
-                )));
-            }
         }
         _ => {}
     }
