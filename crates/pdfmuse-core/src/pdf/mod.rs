@@ -6,7 +6,9 @@
 //! precise bboxes — replaces the text step in PER-36, building on the page
 //! accessors in [`objects`].
 
+mod fonts;
 mod objects;
+mod tables;
 
 use crate::error::{PdfmuseError, Result};
 use crate::ir::{BBox, Block, Document, Metadata, Page, Paragraph, SourceKind, Warning, WarningKind};

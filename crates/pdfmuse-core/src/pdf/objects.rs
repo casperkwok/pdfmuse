@@ -78,7 +78,7 @@ impl PdfDoc {
 fn number(o: &Object) -> Option<f32> {
     match o {
         Object::Integer(i) => Some(*i as f32),
-        Object::Real(r) => Some(*r as f32),
+        Object::Real(r) => Some(*r),
         _ => None,
     }
 }
