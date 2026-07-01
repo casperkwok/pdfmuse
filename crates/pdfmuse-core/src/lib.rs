@@ -4,6 +4,7 @@
 //! interpreter (the real value) in PER-36. The unified IR — the data foundation
 //! that every binding serializes byte-identically — lives in [`ir`].
 
+mod docx;
 pub mod error;
 pub mod ir;
 mod layout;
@@ -51,7 +52,7 @@ pub fn parse_with_password(
             }
             Ok(doc)
         }
-        Some(Format::Docx) => Err(PdfmuseError::Unsupported("DOCX".to_string())),
+        Some(Format::Docx) => docx::parse(data),
         None => Err(PdfmuseError::InvalidFormat),
     }
 }
@@ -81,10 +82,12 @@ mod tests {
     }
 
     #[test]
-    fn docx_is_recognized_but_unsupported() {
+    fn docx_magic_routes_to_docx_parser() {
+        // A bare ZIP magic is a truncated DOCX → recognized, then Malformed
+        // (no longer Unsupported, now that DOCX parsing is implemented).
         assert!(matches!(
             parse(b"PK\x03\x04", None).unwrap_err(),
-            PdfmuseError::Unsupported(_)
+            PdfmuseError::Malformed(_)
         ));
     }
 
