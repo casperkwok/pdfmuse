@@ -32,5 +32,11 @@ jobs:
           npm install
           npm run build:native
 
-      - name: Cross-binding parity (byte-identical)
+      - name: Build the WASM binding
+        run: |
+          rustup target add wasm32-unknown-unknown
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          wasm-pack build crates/pdfmuse-wasm --target nodejs --out-dir pkg
+
+      - name: Cross-binding parity (byte-identical, Python/Node/WASM)
         run: python tests/parity/check.py
