@@ -44,10 +44,15 @@ impl Font {
 
         let names = encoding_names(doc, dict, &base);
         let widths = resolve_widths(doc, dict, &base, &names);
+        // A /ToUnicode CMap, when present, is the authoritative code → text map.
+        let to_unicode = to_unicode_map(doc, dict);
 
         let glyphs = (0..256)
             .map(|c| Glyph {
-                text: name_to_unicode(&names[c]),
+                text: to_unicode
+                    .as_ref()
+                    .and_then(|m| m.get(&(c as u32)).cloned())
+                    .or_else(|| name_to_unicode(&names[c])),
                 width: widths[c],
             })
             .collect();
@@ -63,6 +68,22 @@ impl Font {
 
 fn deref<'a>(doc: &'a Document, o: &'a Object) -> &'a Object {
     doc.dereference(o).map(|(_, x)| x).unwrap_or(o)
+}
+
+/// Parse a font's `/ToUnicode` CMap into a `code -> text` map, if present.
+fn to_unicode_map(doc: &Document, dict: &Dictionary) -> Option<std::collections::BTreeMap<u32, String>> {
+    let obj = dict.get(b"ToUnicode").ok()?;
+    if let Object::Stream(s) = deref(doc, obj) {
+        // Handle both filtered (usual) and raw uncompressed ToUnicode streams.
+        let content = if s.dict.get(b"Filter").is_ok() {
+            s.decompressed_content().ok()?
+        } else {
+            s.content.clone()
+        };
+        Some(super::cmap::parse_to_unicode(&content))
+    } else {
+        None
+    }
 }
 
 fn number(o: &Object) -> f32 {
@@ -225,7 +246,7 @@ fn canonical_base(base: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lopdf::{dictionary, Document, Object};
+    use lopdf::{dictionary, Document, Object, Stream};
 
     fn empty_doc() -> Document {
         Document::with_version("1.5")
@@ -288,5 +309,20 @@ mod tests {
         assert_eq!(name_to_unicode("u1F600"), Some("😀".to_string()));
         assert_eq!(name_to_unicode(".notdef"), None);
         assert_eq!(name_to_unicode(""), None);
+    }
+
+    #[test]
+    fn to_unicode_overrides_encoding() {
+        // A ToUnicode CMap remapping code 0x41 → 'Z' must win over WinAnsi's 'A'.
+        let mut doc = empty_doc();
+        let cmap = b"1 beginbfchar\n<41> <005A>\nendbfchar".to_vec();
+        let tu_id = doc.add_object(Stream::new(lopdf::Dictionary::new(), cmap));
+        let dict = dictionary! {
+            "Type" => "Font", "Subtype" => "Type1",
+            "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding",
+            "ToUnicode" => tu_id,
+        };
+        let font = Font::from_dict(&doc, &dict);
+        assert_eq!(font.decode(b'A').0, Some("Z"));
     }
 }

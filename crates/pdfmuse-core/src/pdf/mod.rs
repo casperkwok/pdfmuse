@@ -6,6 +6,7 @@
 //! precise bboxes — replaces the text step in PER-36, building on the page
 //! accessors in [`objects`].
 
+mod cmap;
 mod content;
 mod fonts;
 mod graphics;
