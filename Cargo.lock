@@ -862,6 +862,7 @@ dependencies = [
  "insta",
  "lopdf",
  "quick-xml",
+ "rayon",
  "serde",
  "serde_json",
  "thiserror",

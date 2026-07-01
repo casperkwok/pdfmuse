@@ -48,14 +48,24 @@ pub fn parse_with_password(
         Some(Format::Pdf) => {
             let mut doc = pdf::parse_pdf(data, password)?;
             // Geometric layout: chars → lines → paragraphs (reading order).
-            for page in &mut doc.pages {
-                layout::layout_page(page);
-            }
+            layout_pages(&mut doc);
             Ok(doc)
         }
         Some(Format::Docx) => docx::parse(data),
         None => Err(PdfmuseError::InvalidFormat),
     }
+}
+
+/// Run geometric layout on every page. Parallel across cores with the `rayon`
+/// feature enabled, sequential otherwise — identical output either way.
+fn layout_pages(doc: &mut ir::Document) {
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        doc.pages.par_iter_mut().for_each(layout::layout_page);
+    }
+    #[cfg(not(feature = "rayon"))]
+    doc.pages.iter_mut().for_each(layout::layout_page);
 }
 
 /// Detect the container format from leading magic bytes.

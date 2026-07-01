@@ -6,6 +6,16 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = []
+# Parallelize per-page layout across cores. Off by default; not built for WASM.
+rayon = ["dep:rayon"]
+# Reserved: an optional pdfium-render fallback engine for malformed PDFs the pure
+# path can't handle. Off by default; can't target WASM. The native pdfium library
+# integration is future work — the flag reserves the seam so enabling it later is
+# non-breaking.
+pdfium = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -13,6 +23,7 @@ thiserror = { workspace = true }
 lopdf = { workspace = true }
 zip = { workspace = true }
 quick-xml = { workspace = true }
+rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta = "1"
