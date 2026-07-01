@@ -1,0 +1,195 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_json(\"table.pdf\")"
+---
+{
+  "metadata": {
+    "author": null,
+    "creator": null,
+    "keywords": null,
+    "page_count": 1,
+    "producer": null,
+    "subject": null,
+    "title": null
+  },
+  "outline": [],
+  "pages": [
+    {
+      "blocks": [
+        {
+          "Table": {
+            "bbox": {
+              "x0": 100.0,
+              "x1": 200.0,
+              "y0": 52.0,
+              "y1": 92.0
+            },
+            "rows": [
+              [
+                {
+                  "bbox": {
+                    "x0": 100.0,
+                    "x1": 150.0,
+                    "y0": 52.0,
+                    "y1": 72.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "A"
+                },
+                {
+                  "bbox": {
+                    "x0": 150.0,
+                    "x1": 200.0,
+                    "y0": 52.0,
+                    "y1": 72.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "B"
+                }
+              ],
+              [
+                {
+                  "bbox": {
+                    "x0": 100.0,
+                    "x1": 150.0,
+                    "y0": 72.0,
+                    "y1": 92.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "C"
+                },
+                {
+                  "bbox": {
+                    "x0": 150.0,
+                    "x1": 200.0,
+                    "y0": 72.0,
+                    "y1": 92.0
+                  },
+                  "col_span": 1,
+                  "row_span": 1,
+                  "text": "D"
+                }
+              ]
+            ],
+            "source": "Ruled"
+          }
+        }
+      ],
+      "chars": [
+        {
+          "bbox": {
+            "x0": 120.0,
+            "x1": 126.0,
+            "y0": 59.0,
+            "y1": 69.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 10.0,
+          "text": "A"
+        },
+        {
+          "bbox": {
+            "x0": 170.0,
+            "x1": 176.0,
+            "y0": 59.0,
+            "y1": 69.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 10.0,
+          "text": "B"
+        },
+        {
+          "bbox": {
+            "x0": 120.0,
+            "x1": 126.0,
+            "y0": 79.0,
+            "y1": 89.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 10.0,
+          "text": "C"
+        },
+        {
+          "bbox": {
+            "x0": 170.0,
+            "x1": 176.0,
+            "y0": 79.0,
+            "y1": 89.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 10.0,
+          "text": "D"
+        }
+      ],
+      "height": 792.0,
+      "images": [],
+      "index": 0,
+      "lines": [],
+      "links": [],
+      "rects": [],
+      "rotation": 0,
+      "rules": [
+        {
+          "width": 1.0,
+          "x0": 100.0,
+          "x1": 100.0,
+          "y0": 92.0,
+          "y1": 52.0
+        },
+        {
+          "width": 1.0,
+          "x0": 150.0,
+          "x1": 150.0,
+          "y0": 92.0,
+          "y1": 52.0
+        },
+        {
+          "width": 1.0,
+          "x0": 200.0,
+          "x1": 200.0,
+          "y0": 92.0,
+          "y1": 52.0
+        },
+        {
+          "width": 1.0,
+          "x0": 100.0,
+          "x1": 200.0,
+          "y0": 92.0,
+          "y1": 92.0
+        },
+        {
+          "width": 1.0,
+          "x0": 100.0,
+          "x1": 200.0,
+          "y0": 72.0,
+          "y1": 72.0
+        },
+        {
+          "width": 1.0,
+          "x0": 100.0,
+          "x1": 200.0,
+          "y0": 52.0,
+          "y1": 52.0
+        }
+      ],
+      "width": 612.0
+    }
+  ],
+  "source": "Pdf",
+  "warnings": []
+}

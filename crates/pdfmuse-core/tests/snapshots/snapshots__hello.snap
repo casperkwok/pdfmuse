@@ -1,0 +1,254 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_json(\"hello.pdf\")"
+---
+{
+  "metadata": {
+    "author": null,
+    "creator": null,
+    "keywords": null,
+    "page_count": 1,
+    "producer": null,
+    "subject": null,
+    "title": null
+  },
+  "outline": [],
+  "pages": [
+    {
+      "blocks": [
+        {
+          "Paragraph": {
+            "bbox": {
+              "x0": 72.0,
+              "x1": 259.2,
+              "y0": 48.0,
+              "y1": 72.0
+            },
+            "heading_level": null,
+            "text": "Hello pdfmuse"
+          }
+        }
+      ],
+      "chars": [
+        {
+          "bbox": {
+            "x0": 72.0,
+            "x1": 86.4,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "H"
+        },
+        {
+          "bbox": {
+            "x0": 86.4,
+            "x1": 100.8,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "e"
+        },
+        {
+          "bbox": {
+            "x0": 100.8,
+            "x1": 115.2,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "l"
+        },
+        {
+          "bbox": {
+            "x0": 115.2,
+            "x1": 129.6,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "l"
+        },
+        {
+          "bbox": {
+            "x0": 129.6,
+            "x1": 144.0,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "o"
+        },
+        {
+          "bbox": {
+            "x0": 144.0,
+            "x1": 158.4,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": " "
+        },
+        {
+          "bbox": {
+            "x0": 158.4,
+            "x1": 172.8,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "p"
+        },
+        {
+          "bbox": {
+            "x0": 172.8,
+            "x1": 187.2,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "d"
+        },
+        {
+          "bbox": {
+            "x0": 187.2,
+            "x1": 201.6,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "f"
+        },
+        {
+          "bbox": {
+            "x0": 201.6,
+            "x1": 216.0,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "m"
+        },
+        {
+          "bbox": {
+            "x0": 216.0,
+            "x1": 230.4,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "u"
+        },
+        {
+          "bbox": {
+            "x0": 230.4,
+            "x1": 244.8,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "s"
+        },
+        {
+          "bbox": {
+            "x0": 244.8,
+            "x1": 259.2,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "color": null,
+          "font": {
+            "name": "Courier"
+          },
+          "size": 24.0,
+          "text": "e"
+        }
+      ],
+      "height": 792.0,
+      "images": [],
+      "index": 0,
+      "lines": [
+        {
+          "bbox": {
+            "x0": 72.0,
+            "x1": 259.2,
+            "y0": 48.0,
+            "y1": 72.0
+          },
+          "chars": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "text": "Hello pdfmuse"
+        }
+      ],
+      "links": [],
+      "rects": [],
+      "rotation": 0,
+      "rules": [],
+      "width": 612.0
+    }
+  ],
+  "source": "Pdf",
+  "warnings": []
+}
