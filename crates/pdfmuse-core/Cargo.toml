@@ -1,0 +1,10 @@
+[package]
+name = "pdfmuse-core"
+description = "Deterministic PDF/DOCX parser core (pure Rust). The value core of pdfmuse."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Added incrementally: serde (PER-31), lopdf (PER-33), quick-xml/zip (PER-52), thiserror (PER-32).

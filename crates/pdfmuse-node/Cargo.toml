@@ -1,0 +1,10 @@
+[package]
+name = "pdfmuse-node"
+description = "pdfmuse binding shell — napi-rs, see PER-48"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pdfmuse-core = { path = "../pdfmuse-core" }

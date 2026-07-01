@@ -1,0 +1,10 @@
+[package]
+name = "pdfmuse-python"
+description = "pdfmuse binding shell — PyO3 + maturin, see PER-34"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+pdfmuse-core = { path = "../pdfmuse-core" }

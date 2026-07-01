@@ -1,0 +1,33 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+pkg/
+*.node
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+*.whl
+.pytest_cache/
+
+# Native artifacts
+*.so
+*.dylib
+*.pyd
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Note: Cargo.lock IS committed (this workspace ships a binary, pdfmuse-cli).
