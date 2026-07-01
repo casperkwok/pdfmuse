@@ -1,0 +1,22 @@
+{
+  "name": "pdfmuse",
+  "version": "0.1.0",
+  "description": "Deterministic PDF/DOCX parser for RAG / LLMs — Node.js binding.",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "native",
+    "binaryName": "native"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2",
+    "@types/node": "^20",
+    "typescript": "^5"
+  },
+  "scripts": {
+    "build:native": "napi build --platform --release --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts",
+    "build": "npm run build:native && tsc"
+  }
+}

@@ -1,10 +1,22 @@
 [package]
 name = "pdfmuse-node"
-description = "pdfmuse binding shell — napi-rs, see PER-48"
+description = "Node.js (napi-rs) binding for pdfmuse. See PER-48"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+# cdylib for the native addon. napi renames the artifact to `*.node`.
+crate-type = ["cdylib"]
+
 [dependencies]
 pdfmuse-core = { path = "../pdfmuse-core" }
+serde_json = { workspace = true }
+# default-features off drops the async runtime we don't need; napi6 targets a
+# broad Node ABI (Node >= 10).
+napi = { version = "2", default-features = false, features = ["napi6"] }
+napi-derive = "2"
+
+[build-dependencies]
+napi-build = "2"
