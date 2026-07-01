@@ -6,6 +6,7 @@
 //! lines (PER-40), paragraphs (PER-41), columns/reading-order (PER-42),
 //! tables (PER-43).
 
+mod columns;
 mod lines;
 mod paragraphs;
 
@@ -14,5 +15,6 @@ use crate::ir::Page;
 /// Populate a page's layered structure from its `chars`.
 pub(crate) fn layout_page(page: &mut Page) {
     page.lines = lines::cluster_lines(&page.chars);
-    page.blocks = paragraphs::group_paragraphs(&page.lines);
+    let blocks = paragraphs::group_paragraphs(&page.lines);
+    page.blocks = columns::reading_order(blocks, page.width);
 }
