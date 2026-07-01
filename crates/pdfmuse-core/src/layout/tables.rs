@@ -7,7 +7,9 @@
 //! vertical border ⇒ a horizontal span; a missing horizontal border ⇒ a vertical
 //! span). Highest-precision table path; whitespace-aligned tables are PER-55.
 
-use crate::ir::{BBox, Cell, Char, Rect, Rule, Table, TableSource};
+use std::collections::HashSet;
+
+use crate::ir::{BBox, Cell, Char, Rect, Rule, Table, TableSource, TextLine};
 
 /// Clustering / coverage tolerance in points.
 const EPS: f32 = 2.0;
@@ -154,6 +156,152 @@ fn cell_text(chars: &[Char], cell: BBox) -> String {
     text
 }
 
+// ---------- Whitespace-aligned tables (no borders) ----------
+
+/// A gap wider than this × font size separates columns (well beyond a word space).
+const COL_GAP: f32 = 2.0;
+/// A segment start within this × font size of a column start is "on" that column.
+const COL_TOL: f32 = 0.6;
+
+/// A run of text within a line, bounded by wide gaps.
+struct Run {
+    x0: f32,
+    text: String,
+}
+
+/// Detect whitespace-aligned tables among flow `lines`. Conservative — fires only
+/// on ≥2 consecutive lines that split into the same aligned columns (≥2). Returns
+/// the tables plus the indices of `lines` they consumed; ambiguous regions are
+/// left alone (prefer to miss than misjudge).
+pub(super) fn detect_whitespace(chars: &[Char], lines: &[TextLine]) -> (Vec<Table>, HashSet<usize>) {
+    let mut tables = Vec::new();
+    let mut used = HashSet::new();
+    if lines.is_empty() {
+        return (tables, used);
+    }
+
+    let size = median_size(chars).max(1.0);
+    let tol = COL_TOL * size;
+    let rows: Vec<Vec<Run>> = lines.iter().map(|l| line_segments(chars, l, size)).collect();
+
+    let mut i = 0;
+    while i < lines.len() {
+        if rows[i].len() < 2 {
+            i += 1;
+            continue;
+        }
+        let cols = column_starts(&rows[i]);
+        let mut j = i + 1;
+        while j < lines.len() && rows[j].len() >= 2 && aligns(&rows[j], &cols, tol) {
+            j += 1;
+        }
+        if j - i >= 2 {
+            let bbox = union_bbox(lines[i..j].iter().map(|l| l.bbox));
+            tables.push(build_ws_table(&rows[i..j], &cols, tol, bbox));
+            (i..j).for_each(|k| {
+                used.insert(k);
+            });
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    (tables, used)
+}
+
+fn median_size(chars: &[Char]) -> f32 {
+    let mut sizes: Vec<f32> = chars.iter().map(|c| c.size).collect();
+    if sizes.is_empty() {
+        return 0.0;
+    }
+    sizes.sort_by(f32::total_cmp);
+    sizes[sizes.len() / 2]
+}
+
+/// Split a line into segments at gaps wider than `COL_GAP × size`.
+fn line_segments(chars: &[Char], line: &TextLine, size: f32) -> Vec<Run> {
+    let mut members: Vec<&Char> = line.chars.iter().filter_map(|&i| chars.get(i as usize)).collect();
+    members.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+
+    let mut segs: Vec<Run> = Vec::new();
+    let mut prev_x1: Option<f32> = None;
+    for c in members {
+        let start_new = prev_x1.is_none_or(|px1| c.bbox.x0 - px1 > COL_GAP * size);
+        if start_new {
+            segs.push(Run { x0: c.bbox.x0, text: String::new() });
+        } else if let Some(px1) = prev_x1 {
+            // Normal intra-segment word gap → a space.
+            if c.bbox.x0 - px1 > 0.25 * size {
+                segs.last_mut().unwrap().text.push(' ');
+            }
+        }
+        segs.last_mut().unwrap().text.push_str(&c.text);
+        prev_x1 = Some(c.bbox.x1);
+    }
+    segs
+}
+
+fn column_starts(row: &[Run]) -> Vec<f32> {
+    row.iter().map(|s| s.x0).collect()
+}
+
+/// Every segment sits on a column, and the row spans ≥2 distinct columns.
+fn aligns(row: &[Run], cols: &[f32], tol: f32) -> bool {
+    let mut hit = HashSet::new();
+    for s in row {
+        match nearest_col(s.x0, cols, tol) {
+            Some(c) => {
+                hit.insert(c);
+            }
+            None => return false,
+        }
+    }
+    hit.len() >= 2
+}
+
+fn nearest_col(x: f32, cols: &[f32], tol: f32) -> Option<usize> {
+    cols.iter()
+        .enumerate()
+        .filter(|(_, &c)| (x - c).abs() <= tol)
+        .min_by(|(_, a), (_, b)| (x - **a).abs().total_cmp(&(x - **b).abs()))
+        .map(|(i, _)| i)
+}
+
+fn build_ws_table(rows: &[Vec<Run>], cols: &[f32], tol: f32, bbox: BBox) -> Table {
+    let cells: Vec<Vec<Cell>> = rows
+        .iter()
+        .map(|row| {
+            (0..cols.len())
+                .map(|c| {
+                    let text = row
+                        .iter()
+                        .find(|s| nearest_col(s.x0, cols, tol) == Some(c))
+                        .map(|s| s.text.clone())
+                        .unwrap_or_default();
+                    Cell { text, bbox: BBox::default(), row_span: 1, col_span: 1 }
+                })
+                .collect()
+        })
+        .collect();
+    Table { bbox, rows: cells, source: TableSource::Whitespace }
+}
+
+fn union_bbox(boxes: impl Iterator<Item = BBox>) -> BBox {
+    let mut acc: Option<BBox> = None;
+    for b in boxes {
+        acc = Some(match acc {
+            None => b,
+            Some(a) => BBox {
+                x0: a.x0.min(b.x0),
+                y0: a.y0.min(b.y0),
+                x1: a.x1.max(b.x1),
+                y1: a.y1.max(b.y1),
+            },
+        });
+    }
+    acc.unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +362,65 @@ mod tests {
         // A lone rectangle (just an outer box) is not a table.
         let rects = vec![Rect { bbox: BBox { x0: 0.0, y0: 0.0, x1: 100.0, y1: 40.0 } }];
         assert!(detect_ruled(&[], &rects, &[]).is_empty());
+    }
+
+    /// Append `word`'s chars (size 10, 6pt wide, contiguous) starting at `x0`.
+    fn push_word(chars: &mut Vec<Char>, word: &str, x0: f32, baseline: f32) {
+        let mut x = x0;
+        for ch in word.chars() {
+            chars.push(Char {
+                text: ch.to_string(),
+                bbox: BBox { x0: x, y0: baseline - 10.0, x1: x + 6.0, y1: baseline },
+                font: FontRef { name: "F".into() },
+                size: 10.0,
+                color: None,
+            });
+            x += 6.0;
+        }
+    }
+
+    fn line_of(chars: &mut Vec<Char>, words: &[(&str, f32)], baseline: f32) -> TextLine {
+        let start = chars.len() as u32;
+        let mut x1 = 0.0;
+        for &(w, x0) in words {
+            push_word(chars, w, x0, baseline);
+            x1 = x0 + 6.0 * w.chars().count() as f32;
+        }
+        TextLine {
+            bbox: BBox { x0: words[0].1, y0: baseline - 10.0, x1, y1: baseline },
+            text: String::new(),
+            chars: (start..chars.len() as u32).collect(),
+        }
+    }
+
+    #[test]
+    fn detects_whitespace_table_when_columns_align() {
+        // Three rows, two columns at x≈0 and x≈100 (gap 88 ≫ 2×size).
+        let mut chars = Vec::new();
+        let lines = vec![
+            line_of(&mut chars, &[("A1", 0.0), ("B1", 100.0)], 10.0),
+            line_of(&mut chars, &[("A2", 0.0), ("B2", 100.0)], 30.0),
+            line_of(&mut chars, &[("A3", 0.0), ("B3", 100.0)], 50.0),
+        ];
+        let (tables, used) = detect_whitespace(&chars, &lines);
+        assert_eq!(tables.len(), 1);
+        assert_eq!(tables[0].source, TableSource::Whitespace);
+        assert_eq!(tables[0].rows.len(), 3);
+        let first: Vec<&str> = tables[0].rows[0].iter().map(|c| c.text.as_str()).collect();
+        assert_eq!(first, vec!["A1", "B1"]);
+        assert_eq!(used.len(), 3);
+    }
+
+    #[test]
+    fn ragged_prose_is_not_a_table() {
+        // Single-segment lines (normal prose) → no table, nothing consumed.
+        let mut chars = Vec::new();
+        let lines = vec![
+            line_of(&mut chars, &[("helloworld", 0.0)], 10.0),
+            line_of(&mut chars, &[("foobarbaz", 0.0)], 30.0),
+        ];
+        let (tables, used) = detect_whitespace(&chars, &lines);
+        assert!(tables.is_empty());
+        assert!(used.is_empty());
     }
 }
