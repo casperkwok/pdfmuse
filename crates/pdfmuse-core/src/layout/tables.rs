@@ -162,6 +162,10 @@ fn cell_text(chars: &[Char], cell: BBox) -> String {
 const COL_GAP: f32 = 2.0;
 /// A segment start within this × font size of a column start is "on" that column.
 const COL_TOL: f32 = 0.6;
+/// Minimum consecutive rows for a whitespace table (fewer is too ambiguous).
+const MIN_ROWS: usize = 3;
+/// A real cell is short; longer runs are prose in a multi-column layout, not a table.
+const MAX_CELL_CHARS: usize = 40;
 
 /// A run of text within a line, bounded by wide gaps.
 struct Run {
@@ -191,11 +195,16 @@ pub(super) fn detect_whitespace(chars: &[Char], lines: &[TextLine]) -> (Vec<Tabl
             continue;
         }
         let cols = column_starts(&rows[i]);
+        let ncol = cols.len();
+        // Extend the run only while rows keep the SAME column count and alignment.
         let mut j = i + 1;
-        while j < lines.len() && rows[j].len() >= 2 && aligns(&rows[j], &cols, tol) {
+        while j < lines.len() && rows[j].len() == ncol && aligns(&rows[j], &cols, tol) {
             j += 1;
         }
-        if j - i >= 2 {
+        // Accept only clear tables: enough rows, and short cell-like content
+        // (long runs are prose in a multi-column layout — prefer to miss).
+        let short_cells = (i..j).all(|k| rows[k].iter().all(|s| s.text.chars().count() <= MAX_CELL_CHARS));
+        if j - i >= MIN_ROWS && short_cells {
             let bbox = union_bbox(lines[i..j].iter().map(|l| l.bbox));
             tables.push(build_ws_table(&rows[i..j], &cols, tol, bbox));
             (i..j).for_each(|k| {

@@ -117,13 +117,8 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, String> {
 /// Reconstruct a page's text by concatenating chars in order, joining pages with
 /// a Markdown horizontal rule. This is intentionally a flat text dump.
 fn render_markdown(doc: &Document) -> String {
-    let mut out = doc
-        .pages
-        .iter()
-        .map(|page| page.chars.iter().map(|c| c.text.as_str()).collect::<String>())
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n");
-    // Trailing newline so the dump plays nicely with terminals and pipes.
+    // Use the core output layer (# headings, GitHub tables, reading order).
+    let mut out = pdfmuse_core::to_markdown(doc);
     out.push('\n');
     out
 }
