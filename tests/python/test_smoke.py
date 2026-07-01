@@ -15,18 +15,19 @@ import pdfmuse
 FIXTURE = Path(__file__).resolve().parents[2] / "tests" / "corpus" / "hello.pdf"
 
 
-def test_parse_returns_document_with_text():
+def test_parse_returns_document_with_positioned_text():
     doc = pdfmuse.parse(FIXTURE.read_bytes())
     assert doc.source == "Pdf"
     assert len(doc.pages) == 1
 
-    text = " ".join(
-        blk["Paragraph"]["text"]
-        for page in doc.pages
-        for blk in page.blocks
-        if isinstance(blk, dict) and "Paragraph" in blk
+    chars = doc.pages[0].chars
+    text = "".join(c["text"] for c in chars)
+    assert text == "Hello pdfmuse"
+    # Each char has a bounding box with positive area.
+    assert all(
+        c["bbox"]["x1"] > c["bbox"]["x0"] and c["bbox"]["y1"] > c["bbox"]["y0"]
+        for c in chars
     )
-    assert "Hello pdfmuse" in text
 
 
 def test_unknown_bytes_raise_valueerror():

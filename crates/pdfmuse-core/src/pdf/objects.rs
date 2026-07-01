@@ -51,13 +51,17 @@ impl PdfDoc {
         Some(out)
     }
 
-    /// Decoded, concatenated content-stream bytes for a page. Consumed by the
-    /// content-stream interpreter in PER-36.
-    #[allow(dead_code)] // wired up by content.rs (PER-36)
+    /// Decoded, concatenated content-stream bytes for a page.
     pub(crate) fn content_bytes(&self, page_id: ObjectId) -> Result<Vec<u8>> {
         self.inner
             .get_page_content(page_id)
             .map_err(|e| PdfmuseError::Malformed(e.to_string()))
+    }
+
+    /// The page's (possibly inherited) `/Resources` dictionary.
+    pub(crate) fn page_resources(&self, page_id: ObjectId) -> Option<lopdf::Dictionary> {
+        self.inherited(page_id, b"Resources")
+            .and_then(|o| o.as_dict().ok().cloned())
     }
 
     /// Walk `key` up the page → `Pages` parent chain, resolving references.

@@ -5,10 +5,8 @@
 
 use std::path::PathBuf;
 
-use pdfmuse_core::ir::Block;
-
 #[test]
-fn corpus_hello_pdf_extracts_text() {
+fn corpus_hello_pdf_extracts_positioned_text() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/corpus/hello.pdf");
     let data = std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
 
@@ -16,13 +14,9 @@ fn corpus_hello_pdf_extracts_text() {
     assert_eq!(doc.source, pdfmuse_core::ir::SourceKind::Pdf);
     assert_eq!(doc.pages.len(), 1);
 
-    let text: String = doc.pages[0]
-        .blocks
-        .iter()
-        .filter_map(|b| match b {
-            Block::Paragraph(p) => Some(p.text.as_str()),
-            _ => None,
-        })
-        .collect();
-    assert!(text.contains("Hello pdfmuse"), "extracted text was: {text:?}");
+    let chars = &doc.pages[0].chars;
+    let text: String = chars.iter().map(|c| c.text.as_str()).collect();
+    assert_eq!(text, "Hello pdfmuse");
+    // Every char carries a positive-area bbox in normalized coordinates.
+    assert!(chars.iter().all(|c| c.bbox.x1 > c.bbox.x0 && c.bbox.y1 > c.bbox.y0));
 }

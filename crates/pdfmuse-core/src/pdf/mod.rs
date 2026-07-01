@@ -6,12 +6,13 @@
 //! precise bboxes — replaces the text step in PER-36, building on the page
 //! accessors in [`objects`].
 
+mod content;
 mod fonts;
 mod objects;
 mod tables;
 
 use crate::error::{PdfmuseError, Result};
-use crate::ir::{BBox, Block, Document, Metadata, Page, Paragraph, SourceKind, Warning, WarningKind};
+use crate::ir::{Document, Metadata, Page, SourceKind};
 use objects::PdfDoc;
 
 /// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text` and page
@@ -45,25 +46,10 @@ pub(crate) fn parse_pdf(data: &[u8]) -> Result<Document> {
             page.height = (y1 - y0).abs();
         }
 
-        match pdf.inner.extract_text(&[page_number]) {
-            Ok(text) => {
-                let text = text.trim();
-                if !text.is_empty() {
-                    page.blocks.push(Block::Paragraph(Paragraph {
-                        bbox: BBox::default(),
-                        text: text.to_string(),
-                        heading_level: None,
-                    }));
-                }
-            }
-            // A single unreadable page degrades gracefully: record and continue,
-            // never abort the whole document.
-            Err(e) => out.warnings.push(Warning {
-                page: Some(index),
-                kind: WarningKind::MalformedObject,
-                detail: format!("text extraction failed: {e}"),
-            }),
-        }
+        // Self-written content-stream interpreter → chars with precise bboxes.
+        let (chars, mut page_warnings) = content::extract_page(&pdf, page_id, index, page.height);
+        page.chars = chars;
+        out.warnings.append(&mut page_warnings);
 
         out.pages.push(page);
     }
@@ -74,7 +60,7 @@ pub(crate) fn parse_pdf(data: &[u8]) -> Result<Document> {
 #[cfg(test)]
 mod tests {
     use super::parse_pdf;
-    use crate::ir::{Block, SourceKind};
+    use crate::ir::SourceKind;
     use lopdf::content::{Content, Operation};
     use lopdf::{dictionary, Document as LoDoc, Object, Stream};
 
@@ -119,7 +105,7 @@ mod tests {
     }
 
     #[test]
-    fn extracts_non_empty_text_from_digital_pdf() {
+    fn extracts_positioned_chars_from_digital_pdf() {
         let bytes = sample_pdf("Hello pdfmuse");
         let doc = parse_pdf(&bytes).expect("parses a digital PDF");
         assert_eq!(doc.source, SourceKind::Pdf);
@@ -128,14 +114,18 @@ mod tests {
         assert!(doc.warnings.is_empty(), "unexpected warnings: {:?}", doc.warnings);
         assert_eq!((doc.pages[0].width, doc.pages[0].height), (612.0, 792.0));
 
-        let text: String = doc.pages[0]
-            .blocks
-            .iter()
-            .filter_map(|b| match b {
-                Block::Paragraph(p) => Some(p.text.as_str()),
-                _ => None,
-            })
-            .collect();
-        assert!(text.contains("Hello pdfmuse"), "extracted text was: {text:?}");
+        let chars = &doc.pages[0].chars;
+        let text: String = chars.iter().map(|c| c.text.as_str()).collect();
+        assert_eq!(text, "Hello pdfmuse");
+
+        // The content stream places text at "100 700 Td" with 24pt Courier.
+        // First glyph starts at x≈100; top-left origin means y grows downward.
+        let first = &chars[0];
+        assert_eq!(first.text, "H");
+        assert_eq!(first.size, 24.0);
+        assert!((first.bbox.x0 - 100.0).abs() < 0.5, "x0 = {}", first.bbox.x0);
+        assert!(first.bbox.y1 > first.bbox.y0, "bbox should have positive height");
+        // Courier is monospace 600/1000 em → 14.4pt advance; 'e' is the 2nd char.
+        assert!((chars[1].bbox.x0 - 114.4).abs() < 0.5, "second glyph x0 = {}", chars[1].bbox.x0);
     }
 }

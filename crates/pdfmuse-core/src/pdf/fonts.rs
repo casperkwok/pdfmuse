@@ -6,9 +6,6 @@
 //! (PER-46/47); [`Font::is_cid`] flags them so the interpreter (PER-36) can emit
 //! a `MissingCMap` warning instead of guessing.
 //!
-//! `dead_code` is allowed until content.rs (PER-36) consumes this module.
-#![allow(dead_code)]
-
 use lopdf::{Dictionary, Document, Object};
 
 use super::tables::{agl::AGL, encodings, metrics};
@@ -18,6 +15,8 @@ const DEFAULT_WIDTH: f32 = 500.0;
 
 pub(crate) struct Font {
     glyphs: Vec<Glyph>, // indexed by byte code 0..=255
+    /// BaseFont name, used to label chars in the IR.
+    pub(crate) base: String,
     pub(crate) is_cid: bool,
 }
 
@@ -30,18 +29,18 @@ struct Glyph {
 impl Font {
     /// Build a font model from its dictionary.
     pub(crate) fn from_dict(doc: &Document, dict: &Dictionary) -> Font {
-        let subtype = dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()).unwrap_or(b"");
-        if subtype == b"Type0" {
-            // CID font — real CMap handling is M2. Flag it and stop.
-            return Font { glyphs: vec![Glyph::default(); 256], is_cid: true };
-        }
-
         let base = dict
             .get(b"BaseFont")
             .ok()
             .and_then(|o| o.as_name().ok())
             .map(|n| String::from_utf8_lossy(n).into_owned())
             .unwrap_or_default();
+
+        let subtype = dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()).unwrap_or(b"");
+        if subtype == b"Type0" {
+            // CID font — real CMap handling is M2. Flag it and stop.
+            return Font { glyphs: vec![Glyph::default(); 256], base, is_cid: true };
+        }
 
         let names = encoding_names(doc, dict, &base);
         let widths = resolve_widths(doc, dict, &base, &names);
@@ -52,7 +51,7 @@ impl Font {
                 width: widths[c],
             })
             .collect();
-        Font { glyphs, is_cid: false }
+        Font { glyphs, base, is_cid: false }
     }
 
     /// `(unicode text, advance width in 1/1000 em)` for a byte code.
