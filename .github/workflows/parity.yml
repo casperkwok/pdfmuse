@@ -1,0 +1,36 @@
+name: parity
+
+# Cross-binding parity gate: Python and Node must produce byte-identical IR JSON.
+# A red run here blocks merge — it enforces pdfmuse's "one core, identical output
+# everywhere" promise. WASM joins this gate in M4 (PER-63).
+on:
+  push:
+  pull_request:
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build & install the Python binding
+        run: |
+          pip install maturin
+          maturin build -m crates/pdfmuse-python/Cargo.toml --out dist
+          pip install dist/*.whl
+
+      - name: Build the Node binding
+        working-directory: bindings/node
+        run: |
+          npm install
+          npm run build:native
+
+      - name: Cross-binding parity (byte-identical)
+        run: python tests/parity/check.py
