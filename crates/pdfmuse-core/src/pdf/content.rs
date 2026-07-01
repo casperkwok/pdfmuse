@@ -7,10 +7,11 @@
 //! lopdf (`Content::decode`); the interpretation (matrices, placement, bboxes) is
 //! ours.
 //!
-//! M1 scope: simple (Type1/TrueType) Latin fonts; straight path segments and
-//! rectangles (Bézier curves advance the point but are not emitted). CID/Type0
-//! fonts are flagged via [`super::fonts::Font::is_cid`] and reported as a
-//! `MissingCMap` warning; real CJK handling lands in M2.
+//! Fonts: simple (1-byte) and Type0/CID (2-byte) codes are both handled via
+//! [`super::fonts::Font`] (`code_bytes` drives the read width). A CID font with
+//! no `/ToUnicode` is flagged [`super::fonts::Font::unmapped_cid`] and reported
+//! as a `MissingCMap` warning. Straight path segments and rectangles are
+//! collected; Bézier curves advance the point but are not emitted.
 
 use std::collections::BTreeMap;
 
@@ -252,19 +253,27 @@ fn show(
         Some(f) => f,
         None => return, // no current font — skip
     };
-    if font.is_cid {
+    if font.unmapped_cid {
         if !*warned_cid {
             out.warnings.push(Warning {
                 page: Some(page_index),
                 kind: WarningKind::MissingCMap,
-                detail: format!("CID font '{}' not yet supported (M2)", font.base),
+                detail: format!("CID font '{}' has no ToUnicode; text not recoverable", font.base),
             });
             *warned_cid = true;
         }
         return;
     }
 
-    for &code in bytes {
+    // Simple fonts read one byte per code; Type0/CID read two (big-endian).
+    let step = font.code_bytes.max(1);
+    let mut k = 0;
+    while k < bytes.len() {
+        let code = if step == 2 && k + 1 < bytes.len() {
+            ((bytes[k] as u32) << 8) | bytes[k + 1] as u32
+        } else {
+            bytes[k] as u32
+        };
         let (text, w0) = font.decode(code);
         let w = w0 / 1000.0; // em fraction
 
@@ -298,13 +307,15 @@ fn show(
             }
         }
 
-        // Advance the text matrix.
+        // Advance the text matrix. Word spacing applies only to single-byte code 32.
         let mut adv = w * st.font_size + st.char_spacing;
-        if code == b' ' {
+        if step == 1 && code == 32 {
             adv += st.word_spacing;
         }
         adv *= st.h_scale;
         st.tm = mul([1.0, 0.0, 0.0, 1.0, adv, 0.0], st.tm);
+
+        k += step;
     }
 }
 

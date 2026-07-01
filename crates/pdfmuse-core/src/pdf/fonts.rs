@@ -1,11 +1,16 @@
-//! Font handling for **simple** (Type1 / TrueType) fonts.
+//! Font handling.
 //!
-//! Maps each byte code to a Unicode string (base encoding + `Differences` + the
-//! Adobe Glyph List) and to an advance width (font `Widths` array, else Core-14
-//! metrics, else a fallback). CID / Type0 (CJK) fonts are deferred to M2
-//! (PER-46/47); [`Font::is_cid`] flags them so the interpreter (PER-36) can emit
-//! a `MissingCMap` warning instead of guessing.
+//! **Simple** (Type1/TrueType) fonts map each byte code to a Unicode string (base
+//! encoding + `Differences` + the Adobe Glyph List, overridden by `/ToUnicode`)
+//! and to an advance width (`/Widths`, else Core-14 metrics, else a fallback).
 //!
+//! **CID / Type0** fonts (the CJK case) use 2-byte codes: text comes from the
+//! `/ToUnicode` CMap and widths from the descendant CIDFont's `/W` array. A CID
+//! font with no `/ToUnicode` is flagged [`Font::unmapped_cid`] so the interpreter
+//! can warn instead of guessing.
+
+use std::collections::BTreeMap;
+
 use lopdf::{Dictionary, Document, Object};
 
 use super::tables::{agl::AGL, encodings, metrics};
@@ -14,10 +19,20 @@ use super::tables::{agl::AGL, encodings, metrics};
 const DEFAULT_WIDTH: f32 = 500.0;
 
 pub(crate) struct Font {
-    glyphs: Vec<Glyph>, // indexed by byte code 0..=255
+    /// Bytes consumed per character code: 1 for simple fonts, 2 for Type0/CID.
+    pub(crate) code_bytes: usize,
+    kind: FontKind,
     /// BaseFont name, used to label chars in the IR.
     pub(crate) base: String,
-    pub(crate) is_cid: bool,
+    /// A CID font we couldn't map to text (no `/ToUnicode`) → the interpreter warns.
+    pub(crate) unmapped_cid: bool,
+}
+
+enum FontKind {
+    /// One glyph per byte code (0..=255).
+    Simple(Vec<Glyph>),
+    /// CID font: codes map to text via ToUnicode and to widths via `/W`.
+    Cid { to_unicode: BTreeMap<u32, String>, widths: BTreeMap<u32, f32>, default_width: f32 },
 }
 
 #[derive(Clone, Default)]
@@ -38,8 +53,7 @@ impl Font {
 
         let subtype = dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()).unwrap_or(b"");
         if subtype == b"Type0" {
-            // CID font — real CMap handling is M2. Flag it and stop.
-            return Font { glyphs: vec![Glyph::default(); 256], base, is_cid: true };
+            return cid_font(doc, dict, base);
         }
 
         let names = encoding_names(doc, dict, &base);
@@ -56,13 +70,78 @@ impl Font {
                 width: widths[c],
             })
             .collect();
-        Font { glyphs, base, is_cid: false }
+        Font { code_bytes: 1, kind: FontKind::Simple(glyphs), base, unmapped_cid: false }
     }
 
-    /// `(unicode text, advance width in 1/1000 em)` for a byte code.
-    pub(crate) fn decode(&self, code: u8) -> (Option<&str>, f32) {
-        let g = &self.glyphs[code as usize];
-        (g.text.as_deref(), g.width)
+    /// `(unicode text, advance width in 1/1000 em)` for a character code.
+    pub(crate) fn decode(&self, code: u32) -> (Option<&str>, f32) {
+        match &self.kind {
+            FontKind::Simple(glyphs) => {
+                let g = &glyphs[(code & 0xFF) as usize];
+                (g.text.as_deref(), g.width)
+            }
+            FontKind::Cid { to_unicode, widths, default_width } => (
+                to_unicode.get(&code).map(String::as_str),
+                *widths.get(&code).unwrap_or(default_width),
+            ),
+        }
+    }
+}
+
+/// Build a Type0/CID font. M2 handles the common case: 2-byte codes (Identity or
+/// a predefined CMap) with a `/ToUnicode` text map and `/W` CID widths. Since
+/// ToUnicode is keyed by the shown code, text is correct regardless of the CID
+/// mapping; widths assume CID == code (exact for Identity encodings).
+fn cid_font(doc: &Document, dict: &Dictionary, base: String) -> Font {
+    let to_unicode = to_unicode_map(doc, dict).unwrap_or_default();
+    let (widths, default_width) = cid_widths(doc, dict);
+    let unmapped_cid = to_unicode.is_empty();
+    Font { code_bytes: 2, kind: FontKind::Cid { to_unicode, widths, default_width }, base, unmapped_cid }
+}
+
+/// CID widths from the descendant CIDFont's `/W` array (+ `/DW` default = 1000).
+fn cid_widths(doc: &Document, dict: &Dictionary) -> (BTreeMap<u32, f32>, f32) {
+    let mut widths = BTreeMap::new();
+    let mut default_width = 1000.0;
+    let Some(desc) = descendant(doc, dict) else {
+        return (widths, default_width);
+    };
+    if let Ok(dw) = desc.get(b"DW") {
+        default_width = number(deref(doc, dw));
+    }
+    if let Ok(Object::Array(items)) = desc.get(b"W").map(|o| deref(doc, o)) {
+        parse_w(doc, items, &mut widths);
+    }
+    (widths, default_width)
+}
+
+fn descendant(doc: &Document, dict: &Dictionary) -> Option<Dictionary> {
+    let arr = deref(doc, dict.get(b"DescendantFonts").ok()?).as_array().ok()?;
+    deref(doc, arr.first()?).as_dict().ok().cloned()
+}
+
+/// Parse `/W`: `c [w1 w2 …]` (consecutive CIDs from `c`) or `c_first c_last w`.
+fn parse_w(doc: &Document, items: &[Object], out: &mut BTreeMap<u32, f32>) {
+    let mut i = 0;
+    while i < items.len() {
+        let c = number(deref(doc, &items[i])) as u32;
+        match items.get(i + 1).map(|o| deref(doc, o)) {
+            Some(Object::Array(ws)) => {
+                for (k, w) in ws.iter().enumerate() {
+                    out.insert(c + k as u32, number(deref(doc, w)));
+                }
+                i += 2;
+            }
+            Some(second) => {
+                let c_last = number(second) as u32;
+                let w = items.get(i + 2).map(|o| number(deref(doc, o))).unwrap_or(0.0);
+                for cid in c..=c_last {
+                    out.insert(cid, w);
+                }
+                i += 3;
+            }
+            None => break,
+        }
     }
 }
 
@@ -259,8 +338,8 @@ mod tests {
             "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Courier",
         };
         let font = Font::from_dict(&doc, &dict);
-        assert!(!font.is_cid);
-        let (text, width) = font.decode(b'A');
+        assert_eq!(font.code_bytes, 1);
+        let (text, width) = font.decode(u32::from(b'A'));
         assert_eq!(text, Some("A"));
         assert_eq!(width, 600.0);
     }
@@ -274,9 +353,9 @@ mod tests {
         };
         let font = Font::from_dict(&doc, &dict);
         // WinAnsi 0x20 = space; Helvetica 'space' width = 278.
-        assert_eq!(font.decode(b' '), (Some(" "), 278.0));
+        assert_eq!(font.decode(u32::from(b' ')), (Some(" "), 278.0));
         // 'A' in Helvetica = 667.
-        assert_eq!(font.decode(b'A'), (Some("A"), 667.0));
+        assert_eq!(font.decode(u32::from(b'A')), (Some("A"), 667.0));
     }
 
     #[test]
@@ -290,15 +369,42 @@ mod tests {
             "Widths" => vec![Object::Integer(111), Object::Integer(222)],
         };
         let font = Font::from_dict(&doc, &dict);
-        assert_eq!(font.decode(b'A').1, 111.0);
-        assert_eq!(font.decode(b'B').1, 222.0);
+        assert_eq!(font.decode(u32::from(b'A')).1, 111.0);
+        assert_eq!(font.decode(u32::from(b'B')).1, 222.0);
     }
 
     #[test]
-    fn type0_is_flagged_as_cid() {
+    fn type0_without_tounicode_is_unmapped() {
         let doc = empty_doc();
         let dict = dictionary! { "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "X" };
-        assert!(Font::from_dict(&doc, &dict).is_cid);
+        let f = Font::from_dict(&doc, &dict);
+        assert_eq!(f.code_bytes, 2);
+        assert!(f.unmapped_cid);
+    }
+
+    #[test]
+    fn type0_cid_decodes_via_tounicode_and_w() {
+        let mut doc = empty_doc();
+        // 2-byte codes 0x0001 → 中, 0x0002 → 文.
+        let cmap = b"beginbfchar\n<0001> <4E2D>\n<0002> <6587>\nendbfchar".to_vec();
+        let tu = doc.add_object(Stream::new(lopdf::Dictionary::new(), cmap));
+        // Descendant CIDFont: W = [1 [900 950]] → CID 1 = 900, CID 2 = 950.
+        let cidfont = doc.add_object(dictionary! {
+            "Type" => "Font", "Subtype" => "CIDFontType2", "BaseFont" => "X",
+            "DW" => 1000,
+            "W" => vec![Object::Integer(1), Object::Array(vec![Object::Integer(900), Object::Integer(950)])],
+        });
+        let dict = dictionary! {
+            "Type" => "Font", "Subtype" => "Type0", "BaseFont" => "X",
+            "Encoding" => "Identity-H",
+            "DescendantFonts" => vec![Object::Reference(cidfont)],
+            "ToUnicode" => tu,
+        };
+        let f = Font::from_dict(&doc, &dict);
+        assert_eq!(f.code_bytes, 2);
+        assert!(!f.unmapped_cid);
+        assert_eq!(f.decode(0x0001), (Some("\u{4E2D}"), 900.0)); // 中
+        assert_eq!(f.decode(0x0002), (Some("\u{6587}"), 950.0)); // 文
     }
 
     #[test]
@@ -323,6 +429,6 @@ mod tests {
             "ToUnicode" => tu_id,
         };
         let font = Font::from_dict(&doc, &dict);
-        assert_eq!(font.decode(b'A').0, Some("Z"));
+        assert_eq!(font.decode(u32::from(b'A')).0, Some("Z"));
     }
 }
