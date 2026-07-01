@@ -6,6 +6,7 @@
 
 pub mod error;
 pub mod ir;
+mod layout;
 mod pdf;
 
 pub use error::{PdfmuseError, Result};
@@ -28,7 +29,14 @@ pub enum Format {
 /// interpreter that fills [`ir::Page::chars`] with precise bboxes.
 pub fn parse(data: &[u8], fmt: Option<Format>) -> Result<ir::Document> {
     match fmt.or_else(|| detect_format(data)) {
-        Some(Format::Pdf) => pdf::parse_pdf(data),
+        Some(Format::Pdf) => {
+            let mut doc = pdf::parse_pdf(data)?;
+            // Geometric layout: chars → lines → paragraphs (reading order).
+            for page in &mut doc.pages {
+                layout::layout_page(page);
+            }
+            Ok(doc)
+        }
         Some(Format::Docx) => Err(PdfmuseError::Unsupported("DOCX".to_string())),
         None => Err(PdfmuseError::InvalidFormat),
     }
