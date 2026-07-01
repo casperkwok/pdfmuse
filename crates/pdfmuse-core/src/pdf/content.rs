@@ -64,6 +64,11 @@ pub(crate) fn extract_page(
     let mut st = GraphicsState::default();
     let mut stack: Vec<GraphicsState> = Vec::new();
     let mut path = Path::default();
+    // Path geometry is buffered until the painting op: only *stroked* paths become
+    // table borders. Filled rectangles are decorative (backgrounds/highlights), not
+    // grid lines, so they must not fool ruled-table detection.
+    let mut pending_rects: Vec<Rect> = Vec::new();
+    let mut pending_rules: Vec<Rule> = Vec::new();
     let mut warned_cid = false;
 
     for op in &ops {
@@ -89,7 +94,7 @@ pub(crate) fn extract_page(
                 let p = (num(a, 0), num(a, 1));
                 if let Some(prev) = path.cur {
                     if let Some(r) = graphics::make_rule(apply(&st.ctm, prev.0, prev.1), apply(&st.ctm, p.0, p.1), st.line_width, page_height) {
-                        out.rules.push(r);
+                        pending_rules.push(r);
                     }
                 }
                 path.cur = Some(p);
@@ -102,7 +107,7 @@ pub(crate) fn extract_page(
                     apply(&st.ctm, x, y + h),
                     apply(&st.ctm, x + w, y + h),
                 ];
-                out.rects.push(graphics::make_rect(corners, page_height));
+                pending_rects.push(graphics::make_rect(corners, page_height));
                 path.cur = Some((x, y));
                 path.start = Some((x, y));
             }
@@ -112,13 +117,23 @@ pub(crate) fn extract_page(
             "h" => {
                 if let (Some(cur), Some(start)) = (path.cur, path.start) {
                     if let Some(r) = graphics::make_rule(apply(&st.ctm, cur.0, cur.1), apply(&st.ctm, start.0, start.1), st.line_width, page_height) {
-                        out.rules.push(r);
+                        pending_rules.push(r);
                     }
                 }
                 path.cur = path.start;
             }
-            // Path painting / clipping ends the current path.
-            "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => path = Path::default(),
+            // Painting ops end the path. Stroked paths (S/B family) are real borders
+            // → commit them; fill-only (f) or no-paint (n) paths are discarded.
+            "S" | "s" | "B" | "B*" | "b" | "b*" => {
+                out.rects.append(&mut pending_rects);
+                out.rules.append(&mut pending_rules);
+                path = Path::default();
+            }
+            "f" | "F" | "f*" | "n" => {
+                pending_rects.clear();
+                pending_rules.clear();
+                path = Path::default();
+            }
 
             // --- text object ---
             "BT" => {
