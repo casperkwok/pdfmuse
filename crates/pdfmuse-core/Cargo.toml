@@ -23,6 +23,7 @@ thiserror = { workspace = true }
 lopdf = { workspace = true }
 zip = { workspace = true }
 quick-xml = { workspace = true }
+unicode-normalization = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use lopdf::content::Content;
 use lopdf::{Object, ObjectId};
+use unicode_normalization::UnicodeNormalization;
 
 use super::fonts::Font;
 use super::graphics;
@@ -24,6 +25,36 @@ use super::objects::PdfDoc;
 use crate::ir::{BBox, Char, FontRef, Rect, Rule, Warning, WarningKind};
 
 const IDENTITY: [f32; 6] = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+
+/// A CJK compatibility/radical codepoint whose glyph is really a normal ideograph.
+/// Some fonts' `/ToUnicode` map here (e.g. Kangxi radical ⽬ U+2F6C for 目 U+76EE),
+/// which silently breaks search/RAG. We NFKC just these blocks — deliberately not
+/// the whole string, so ①②, full-width forms, and ligatures stay byte-exact.
+fn is_cjk_compat(c: char) -> bool {
+    matches!(c as u32,
+        0x2E80..=0x2EFF   // CJK Radicals Supplement
+        | 0x2F00..=0x2FDF // Kangxi Radicals
+        | 0xF900..=0xFAFF // CJK Compatibility Ideographs
+        | 0x2F800..=0x2FA1F // CJK Compatibility Ideographs Supplement
+    )
+}
+
+/// Map CJK compatibility codepoints to their canonical ideograph; pass everything
+/// else through untouched.
+fn normalize_cjk_compat(s: &str) -> String {
+    if !s.chars().any(is_cjk_compat) {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if is_cjk_compat(c) {
+            out.extend(c.to_string().nfkc());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
 
 /// Everything the interpreter extracts from one page.
 pub(crate) struct PageContent {
@@ -313,7 +344,7 @@ fn show(
                     y1 = y1.max(y);
                 }
                 out.chars.push(Char {
-                    text: t.to_string(),
+                    text: normalize_cjk_compat(t),
                     bbox: BBox { x0, y0, x1, y1 },
                     font: FontRef { name: font.base.clone() },
                     size: st.font_size,
@@ -401,4 +432,19 @@ fn name_bytes(o: Option<&Object>) -> Option<Vec<u8>> {
 
 fn warn(page: u32, detail: String) -> Warning {
     Warning { page: Some(page), kind: WarningKind::MalformedObject, detail }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_cjk_compat;
+
+    #[test]
+    fn normalizes_cjk_compat_but_leaves_the_rest() {
+        // Kangxi radicals ⽬ U+2F6C / ⾼ U+2F98 / ⼩ U+2F29 → 目 高 小.
+        assert_eq!(normalize_cjk_compat("题⽬⾼⼩"), "题目高小");
+        // Circled numbers, ASCII, and normal CJK must be byte-exact.
+        assert_eq!(normalize_cjk_compat("①②abc中"), "①②abc中");
+        // No compat chars → same string, no allocation surprises.
+        assert_eq!(normalize_cjk_compat("hello"), "hello");
+    }
 }

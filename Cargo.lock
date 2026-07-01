@@ -761,6 +761,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "unicode-normalization",
  "zip",
 ]
 

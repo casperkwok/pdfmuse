@@ -27,6 +27,7 @@ quick-xml = "0.36"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 thiserror = "2"
 rayon = "1"
+unicode-normalization = "0.1"
 
 [profile.release]
 lto = true
