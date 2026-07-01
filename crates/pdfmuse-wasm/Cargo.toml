@@ -6,5 +6,18 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+# cdylib for the wasm module. wasm-pack emits the `.wasm` + JS glue from it.
+crate-type = ["cdylib"]
+
 [dependencies]
+# Depend on the core with its default features only. `rayon` and `pdfium` cannot
+# target wasm32, and both are off by default — so plain defaults keep this
+# buildable for the browser.
 pdfmuse-core = { path = "../pdfmuse-core" }
+serde_json = { workspace = true }
+wasm-bindgen = "0.2"
+# `lopdf` transitively pulls `getrandom`, which has no default entropy source on
+# `wasm32-unknown-unknown`. Select its browser/JS backend so the module links.
+# The companion `--cfg getrandom_backend="wasm_js"` lives in `.cargo/config.toml`.
+getrandom = { version = "0.3", features = ["wasm_js"] }

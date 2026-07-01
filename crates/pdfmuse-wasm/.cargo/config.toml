@@ -1,0 +1,5 @@
+# `getrandom` 0.3 needs an explicit opt-in to its JS backend for the browser/Node
+# wasm target (it has no default entropy source there). Paired with the
+# `getrandom = { features = ["wasm_js"] }` dependency in Cargo.toml.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
