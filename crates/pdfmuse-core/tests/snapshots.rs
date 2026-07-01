@@ -50,3 +50,8 @@ fn snapshot_hello_single_column() {
 fn snapshot_table_ruled() {
     insta::assert_snapshot!("table", snapshot_json("table.pdf"));
 }
+
+#[test]
+fn snapshot_cjk_type0() {
+    insta::assert_snapshot!("cjk", snapshot_json("cjk.pdf"));
+}

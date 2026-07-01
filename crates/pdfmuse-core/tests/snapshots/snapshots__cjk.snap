@@ -1,0 +1,89 @@
+---
+source: crates/pdfmuse-core/tests/snapshots.rs
+expression: "snapshot_json(\"cjk.pdf\")"
+---
+{
+  "metadata": {
+    "author": null,
+    "creator": null,
+    "keywords": null,
+    "page_count": 1,
+    "producer": null,
+    "subject": null,
+    "title": null
+  },
+  "outline": [],
+  "pages": [
+    {
+      "blocks": [
+        {
+          "Paragraph": {
+            "bbox": {
+              "x0": 100.0,
+              "x1": 148.0,
+              "y0": 68.0,
+              "y1": 92.0
+            },
+            "heading_level": null,
+            "text": "中文"
+          }
+        }
+      ],
+      "chars": [
+        {
+          "bbox": {
+            "x0": 100.0,
+            "x1": 124.0,
+            "y0": 68.0,
+            "y1": 92.0
+          },
+          "color": null,
+          "font": {
+            "name": "CJKFont"
+          },
+          "size": 24.0,
+          "text": "中"
+        },
+        {
+          "bbox": {
+            "x0": 124.0,
+            "x1": 148.0,
+            "y0": 68.0,
+            "y1": 92.0
+          },
+          "color": null,
+          "font": {
+            "name": "CJKFont"
+          },
+          "size": 24.0,
+          "text": "文"
+        }
+      ],
+      "height": 792.0,
+      "images": [],
+      "index": 0,
+      "lines": [
+        {
+          "bbox": {
+            "x0": 100.0,
+            "x1": 148.0,
+            "y0": 68.0,
+            "y1": 92.0
+          },
+          "chars": [
+            0,
+            1
+          ],
+          "text": "中文"
+        }
+      ],
+      "links": [],
+      "rects": [],
+      "rotation": 0,
+      "rules": [],
+      "width": 612.0
+    }
+  ],
+  "source": "Pdf",
+  "warnings": []
+}
