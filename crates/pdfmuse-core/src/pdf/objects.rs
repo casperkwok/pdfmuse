@@ -20,16 +20,22 @@ pub(crate) struct PdfDoc {
 }
 
 impl PdfDoc {
-    /// Load bytes and run the validation pass. Returns the wrapped document plus
-    /// any non-fatal warnings; a broken container is a fatal `Err`.
-    pub(crate) fn load(data: &[u8]) -> Result<(Self, Vec<Warning>)> {
-        let inner = LoDoc::load_mem(data).map_err(|e| PdfmuseError::Malformed(e.to_string()))?;
+    /// Load bytes, decrypt if needed, and run the validation pass. Returns the
+    /// wrapped document plus any non-fatal warnings; a broken container or a
+    /// failed decryption is a fatal `Err`.
+    ///
+    /// Decryption happens *before* validation so encrypted streams are not
+    /// false-flagged as malformed. The password is never logged.
+    pub(crate) fn load(data: &[u8], password: Option<&str>) -> Result<(Self, Vec<Warning>)> {
+        let mut inner = LoDoc::load_mem(data).map_err(|e| PdfmuseError::Malformed(e.to_string()))?;
+        if inner.is_encrypted() {
+            // Try the given password, else the empty user password (common default).
+            inner
+                .decrypt(password.unwrap_or(""))
+                .map_err(|_| PdfmuseError::EncryptedNoPassword)?;
+        }
         let warnings = validate(&inner);
         Ok((Self { inner }, warnings))
-    }
-
-    pub(crate) fn is_encrypted(&self) -> bool {
-        self.inner.trailer.get(b"Encrypt").is_ok()
     }
 
     pub(crate) fn pages(&self) -> BTreeMap<u32, ObjectId> {
@@ -138,7 +144,7 @@ mod tests {
     fn reads_media_box_from_corpus_fixture() {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/corpus/hello.pdf");
         let data = std::fs::read(path).expect("read fixture");
-        let (pdf, warnings) = PdfDoc::load(&data).expect("load");
+        let (pdf, warnings) = PdfDoc::load(&data, None).expect("load");
 
         assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
         let (&page_num, &page_id) = pdf.pages().iter().next().expect("one page");
@@ -157,7 +163,7 @@ mod tests {
         let mut buf = Vec::new();
         doc.save_to(&mut buf).unwrap();
 
-        let (_pdf, warnings) = PdfDoc::load(&buf).expect("load");
+        let (_pdf, warnings) = PdfDoc::load(&buf, None).expect("load");
         assert!(
             warnings.iter().any(|w| w.detail.contains("missing object 999:0")),
             "warnings were: {warnings:?}"

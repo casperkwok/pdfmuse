@@ -13,21 +13,16 @@ mod graphics;
 mod objects;
 mod tables;
 
-use crate::error::{PdfmuseError, Result};
+use crate::error::Result;
 use crate::ir::{Document, Metadata, Page, SourceKind};
 use objects::PdfDoc;
 
 /// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text` and page
 /// dimensions from the MediaBox; leaves `chars`/`lines` empty until the
 /// content-stream interpreter (PER-36) lands.
-pub(crate) fn parse_pdf(data: &[u8]) -> Result<Document> {
-    let (pdf, warnings) = PdfDoc::load(data)?;
-
-    // Encrypted documents need a password — support arrives in PER-50. The
-    // password (once supported) is never logged.
-    if pdf.is_encrypted() {
-        return Err(PdfmuseError::EncryptedNoPassword);
-    }
+pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document> {
+    // Loading handles decryption (encrypted + wrong/no password → fatal Err).
+    let (pdf, warnings) = PdfDoc::load(data, password)?;
 
     let pages = pdf.pages();
     let mut out = Document {
@@ -112,7 +107,7 @@ mod tests {
     #[test]
     fn extracts_positioned_chars_from_digital_pdf() {
         let bytes = sample_pdf("Hello pdfmuse");
-        let doc = parse_pdf(&bytes).expect("parses a digital PDF");
+        let doc = parse_pdf(&bytes, None).expect("parses a digital PDF");
         assert_eq!(doc.source, SourceKind::Pdf);
         assert_eq!(doc.pages.len(), 1);
         assert_eq!(doc.metadata.page_count, 1);
@@ -162,7 +157,7 @@ mod tests {
 
     #[test]
     fn collects_vector_rectangles() {
-        let doc = parse_pdf(&sample_pdf_with_rect()).expect("parses");
+        let doc = parse_pdf(&sample_pdf_with_rect(), None).expect("parses");
         let rects = &doc.pages[0].rects;
         assert_eq!(rects.len(), 1);
         // "re 100 100 200 50" → user corners (100,100)-(300,150); identity CTM.

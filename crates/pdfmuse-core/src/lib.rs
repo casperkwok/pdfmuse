@@ -28,9 +28,21 @@ pub enum Format {
 /// coordinates). PER-36 replaces the PDF path with the self-written content-stream
 /// interpreter that fills [`ir::Page::chars`] with precise bboxes.
 pub fn parse(data: &[u8], fmt: Option<Format>) -> Result<ir::Document> {
+    parse_with_password(data, fmt, None)
+}
+
+/// Like [`parse`], but supplies a `password` for encrypted PDFs.
+///
+/// An encrypted document with no/incorrect password fails with
+/// [`PdfmuseError::EncryptedNoPassword`]. The password is never logged or echoed.
+pub fn parse_with_password(
+    data: &[u8],
+    fmt: Option<Format>,
+    password: Option<&str>,
+) -> Result<ir::Document> {
     match fmt.or_else(|| detect_format(data)) {
         Some(Format::Pdf) => {
-            let mut doc = pdf::parse_pdf(data)?;
+            let mut doc = pdf::parse_pdf(data, password)?;
             // Geometric layout: chars → lines → paragraphs (reading order).
             for page in &mut doc.pages {
                 layout::layout_page(page);
