@@ -7,9 +7,11 @@
 pub mod error;
 pub mod ir;
 mod layout;
+mod output;
 mod pdf;
 
 pub use error::{PdfmuseError, Result};
+pub use output::{chunk, to_json, to_markdown, Chunk};
 
 /// Source-format hint for [`parse`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
