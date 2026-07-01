@@ -4,6 +4,7 @@
 //! interpreter (the real value) in PER-36. The unified IR — the data foundation
 //! that every binding serializes byte-identically — lives in [`ir`].
 
+pub mod backend;
 mod docx;
 pub mod error;
 pub mod ir;

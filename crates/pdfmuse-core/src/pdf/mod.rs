@@ -14,7 +14,7 @@ mod objects;
 mod tables;
 
 use crate::error::Result;
-use crate::ir::{Document, Metadata, Page, SourceKind};
+use crate::ir::{Document, Metadata, Page, SourceKind, Warning, WarningKind};
 use objects::PdfDoc;
 
 /// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text` and page
@@ -51,6 +51,15 @@ pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document>
         page.rules = pc.rules;
         out.warnings.append(&mut pc.warnings);
 
+        // A page with images but no text layer is scanned → needs an OCR backend.
+        if page.chars.is_empty() && pdf.page_has_image(page_id) {
+            out.warnings.push(Warning {
+                page: Some(index),
+                kind: WarningKind::NeedsOcr,
+                detail: "page has no text layer (scanned); needs an OCR backend".into(),
+            });
+        }
+
         out.pages.push(page);
     }
 
@@ -60,7 +69,7 @@ pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document>
 #[cfg(test)]
 mod tests {
     use super::parse_pdf;
-    use crate::ir::SourceKind;
+    use crate::ir::{SourceKind, WarningKind};
     use lopdf::content::{Content, Operation};
     use lopdf::{dictionary, Document as LoDoc, Object, Stream};
 
@@ -166,5 +175,50 @@ mod tests {
         assert!((b.x0 - 100.0).abs() < 0.5, "x0 = {}", b.x0);
         assert!((b.x1 - 300.0).abs() < 0.5, "x1 = {}", b.x1);
         assert!((b.y0 - 642.0).abs() < 0.5 && (b.y1 - 692.0).abs() < 0.5, "y = {},{}", b.y0, b.y1);
+    }
+
+    /// A one-page PDF whose only content is an image XObject (a "scanned" page).
+    fn sample_pdf_scanned() -> Vec<u8> {
+        let mut doc = LoDoc::with_version("1.5");
+        let pages_id = doc.new_object_id();
+        let img = doc.add_object(Stream::new(
+            dictionary! {
+                "Type" => "XObject", "Subtype" => "Image",
+                "Width" => 1, "Height" => 1, "BitsPerComponent" => 8, "ColorSpace" => "DeviceGray",
+            },
+            vec![0u8],
+        ));
+        let resources_id = doc.add_object(dictionary! { "XObject" => dictionary! { "Im1" => img } });
+        let content = Content {
+            operations: vec![
+                Operation::new("q", vec![]),
+                Operation::new("Do", vec![Object::Name(b"Im1".to_vec())]),
+                Operation::new("Q", vec![]),
+            ],
+        };
+        let content_id = doc.add_object(Stream::new(dictionary! {}, content.encode().unwrap()));
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages_id, "Contents" => content_id,
+            "Resources" => resources_id,
+            "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+        });
+        let pages = dictionary! { "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 };
+        doc.objects.insert(pages_id, Object::Dictionary(pages));
+        let catalog_id = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+        doc.trailer.set("Root", catalog_id);
+        let mut buf = Vec::new();
+        doc.save_to(&mut buf).unwrap();
+        buf
+    }
+
+    #[test]
+    fn scanned_page_warns_needs_ocr() {
+        let doc = parse_pdf(&sample_pdf_scanned(), None).expect("parses");
+        assert!(doc.pages[0].chars.is_empty(), "scanned page should have no text");
+        assert!(
+            doc.warnings.iter().any(|w| w.kind == WarningKind::NeedsOcr),
+            "expected NeedsOcr; got {:?}",
+            doc.warnings
+        );
     }
 }

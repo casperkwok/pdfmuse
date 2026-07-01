@@ -70,6 +70,26 @@ impl PdfDoc {
             .and_then(|o| o.as_dict().ok().cloned())
     }
 
+    /// Does the page reference an image XObject? A page with images but no text
+    /// is a scanned page that needs OCR (a pluggable-backend job).
+    pub(crate) fn page_has_image(&self, page_id: ObjectId) -> bool {
+        let Some(res) = self.page_resources(page_id) else {
+            return false;
+        };
+        let Ok(xobj) = res.get(b"XObject") else {
+            return false;
+        };
+        let resolved = self.inner.dereference(xobj).map(|(_, o)| o).unwrap_or(xobj);
+        let Ok(dict) = resolved.as_dict() else {
+            return false;
+        };
+        dict.iter().any(|(_, v)| {
+            let obj = self.inner.dereference(v).map(|(_, o)| o).unwrap_or(v);
+            matches!(obj, Object::Stream(s)
+                if s.dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()) == Some(b"Image".as_ref()))
+        })
+    }
+
     /// Walk `key` up the page → `Pages` parent chain, resolving references.
     fn inherited(&self, page_id: ObjectId, key: &[u8]) -> Option<Object> {
         let mut current = Some(page_id);
