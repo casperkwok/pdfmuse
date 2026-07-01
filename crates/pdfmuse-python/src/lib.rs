@@ -13,7 +13,7 @@ use pyo3::prelude::*;
 /// `fmt` forces a format ("pdf"/"docx"); `None` auto-detects from magic bytes.
 #[pyfunction]
 #[pyo3(signature = (data, fmt=None))]
-fn parse_bytes(py: Python<'_>, data: Vec<u8>, fmt: Option<String>) -> PyResult<String> {
+fn parse_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<String> {
     let format = match fmt.as_deref() {
         None => None,
         Some("pdf") => Some(Format::Pdf),
@@ -21,10 +21,13 @@ fn parse_bytes(py: Python<'_>, data: Vec<u8>, fmt: Option<String>) -> PyResult<S
         Some(other) => return Err(PyValueError::new_err(format!("unknown format: {other}"))),
     };
 
-    // Release the GIL so the Rust parse runs without blocking other Python
-    // threads. `data` is owned, so it is safe to move across the GIL boundary.
+    // Take `data` as a borrowed `&[u8]` (zero-copy from Python `bytes`) then a
+    // single memcpy to an owned buffer — extracting `Vec<u8>` directly makes PyO3
+    // copy element-by-element, which is ~100ms on a multi-MB file. Owning the
+    // bytes lets us release the GIL while the Rust parse runs.
+    let owned = data.to_vec();
     let doc = py
-        .allow_threads(move || pdfmuse_core::parse(&data, format))
+        .allow_threads(move || pdfmuse_core::parse(&owned, format))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
 
     serde_json::to_string(&doc).map_err(|e| PyValueError::new_err(e.to_string()))
