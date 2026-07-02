@@ -219,11 +219,9 @@ fn apply_differences(diffs: &[Object], names: &mut [String]) {
     for item in diffs {
         match item {
             Object::Integer(n) => code = (*n).max(0) as usize,
-            Object::Name(name) => {
-                if code < 256 {
-                    names[code] = String::from_utf8_lossy(name).into_owned();
-                    code += 1;
-                }
+            Object::Name(name) if code < 256 => {
+                names[code] = String::from_utf8_lossy(name).into_owned();
+                code += 1;
             }
             _ => {}
         }
