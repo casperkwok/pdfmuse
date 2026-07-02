@@ -11,7 +11,7 @@ repository.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-pdfmuse-core = { path = "../pdfmuse-core" }
+pdfmuse-core = { path = "../pdfmuse-core", features = ["rayon"] }
 serde_json = { workspace = true }
 # default-features off drops the async runtime we don't need; napi6 targets a
 # broad Node ABI (Node >= 10).

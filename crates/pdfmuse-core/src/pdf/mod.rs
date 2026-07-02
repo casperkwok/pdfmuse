@@ -16,18 +16,20 @@ mod graphics;
 mod objects;
 mod tables;
 
+use lopdf::ObjectId;
+
 use crate::error::Result;
 use crate::ir::{Document, Metadata, Page, SourceKind, Warning, WarningKind};
 use objects::PdfDoc;
 
-/// Naive PDF → IR. Fills one [`Paragraph`] per page from `extract_text` and page
-/// dimensions from the MediaBox; leaves `chars`/`lines` empty until the
-/// content-stream interpreter (PER-36) lands.
+/// Parse a PDF into the IR. Pages are extracted independently and in parallel
+/// (with the `rayon` feature; sequential otherwise, e.g. WASM), then reassembled
+/// in page order so output is identical either way.
 pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document> {
     // Loading handles decryption (encrypted + wrong/no password → fatal Err).
     let (pdf, warnings) = PdfDoc::load(data, password)?;
 
-    let pages = pdf.pages();
+    let pages: Vec<(u32, ObjectId)> = pdf.pages().into_iter().collect();
     let mut out = Document {
         source: SourceKind::Pdf,
         metadata: Metadata { page_count: pages.len() as u32, ..Default::default() },
@@ -35,38 +37,59 @@ pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document>
         ..Default::default()
     };
 
-    for (page_number, page_id) in pages {
-        // lopdf page numbers are 1-based; the IR is 0-based.
-        let index = page_number.saturating_sub(1);
-        let mut page = Page { index, ..Default::default() };
-
-        // Page dimensions from the (possibly inherited) MediaBox.
-        if let Some([x0, y0, x1, y1]) = pdf.media_box(page_id) {
-            page.width = (x1 - x0).abs();
-            page.height = (y1 - y0).abs();
-        }
-
-        // Self-written content-stream interpreter → chars with precise bboxes
-        // plus vector rects/rules.
-        let mut pc = content::extract_page(&pdf, page_id, index, page.height);
-        page.chars = pc.chars;
-        page.rects = pc.rects;
-        page.rules = pc.rules;
-        out.warnings.append(&mut pc.warnings);
-
-        // A page with images but no text layer is scanned → needs an OCR backend.
-        if page.chars.is_empty() && pdf.page_has_image(page_id) {
-            out.warnings.push(Warning {
-                page: Some(index),
-                kind: WarningKind::NeedsOcr,
-                detail: "page has no text layer (scanned); needs an OCR backend".into(),
-            });
-        }
-
+    for (page, mut page_warnings) in extract_pages(&pdf, &pages) {
+        out.warnings.append(&mut page_warnings);
         out.pages.push(page);
     }
 
     Ok(out)
+}
+
+/// Extract one page — content-stream interpretation plus its own warnings. Purely
+/// a function of the page, so it is safe to run for many pages concurrently.
+fn extract_one(pdf: &PdfDoc<'_>, page_number: u32, page_id: ObjectId) -> (Page, Vec<Warning>) {
+    // lopdf page numbers are 1-based; the IR is 0-based.
+    let index = page_number.saturating_sub(1);
+    let mut page = Page { index, ..Default::default() };
+
+    // Page dimensions from the (possibly inherited) MediaBox.
+    if let Some([x0, y0, x1, y1]) = pdf.media_box(page_id) {
+        page.width = (x1 - x0).abs();
+        page.height = (y1 - y0).abs();
+    }
+
+    // Self-written content-stream interpreter → chars with precise bboxes plus
+    // vector rects/rules.
+    let pc = content::extract_page(pdf, page_id, index, page.height);
+    page.chars = pc.chars;
+    page.rects = pc.rects;
+    page.rules = pc.rules;
+    let mut warnings = pc.warnings;
+
+    // A page with images but no text layer is scanned → needs an OCR backend.
+    if page.chars.is_empty() && pdf.page_has_image(page_id) {
+        warnings.push(Warning {
+            page: Some(index),
+            kind: WarningKind::NeedsOcr,
+            detail: "page has no text layer (scanned); needs an OCR backend".into(),
+        });
+    }
+
+    (page, warnings)
+}
+
+/// Map every page to `(Page, warnings)` in page order. Parallel across cores with
+/// the `rayon` feature; identical output either way (pages are independent).
+fn extract_pages(pdf: &PdfDoc<'_>, pages: &[(u32, ObjectId)]) -> Vec<(Page, Vec<Warning>)> {
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        pages.par_iter().map(|&(n, id)| extract_one(pdf, n, id)).collect()
+    }
+    #[cfg(not(feature = "rayon"))]
+    {
+        pages.iter().map(|&(n, id)| extract_one(pdf, n, id)).collect()
+    }
 }
 
 #[cfg(test)]

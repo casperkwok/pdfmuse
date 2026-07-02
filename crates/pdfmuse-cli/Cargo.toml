@@ -11,5 +11,5 @@ name = "pdfmuse"
 path = "src/main.rs"
 
 [dependencies]
-pdfmuse-core = { path = "../pdfmuse-core" }
+pdfmuse-core = { path = "../pdfmuse-core", features = ["rayon"] }
 serde_json = { workspace = true }
