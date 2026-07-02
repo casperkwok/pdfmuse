@@ -108,11 +108,17 @@ def section(binary, path, max_pages):
     md = subprocess.run([binary, "parse", path, "--format", "md"], capture_output=True).stdout.decode()
     pages = doc["pages"]
     stats = f'{len(pages)} 页 · {sum(len(p["chars"]) for p in pages):,} 字符 · {sum(len(p["rules"]) for p in pages)} 线 · {len(doc.get("warnings", []))} 警告'
+    ocr_pages = {w.get("page") for w in doc.get("warnings", []) if w.get("kind") == "NeedsOcr"}
     origs = render_original(path, max_pages)
     rows = []
     for i, p in enumerate(pages[:max_pages]):
         o = f'<figure><figcaption>原始 PDF · 第{i+1}页</figcaption><img src="data:image/png;base64,{origs[i]}"/></figure>' if i < len(origs) else ""
-        rows.append(f'<div class="cmp">{o}<figure><figcaption>pdfmuse 坐标还原</figcaption>{svg(p)}</figure></div>')
+        if not p["chars"]:
+            note = "无文字层(扫描件/整页图片)· 需 OCR" if i in ocr_pages else "此页无提取到文字"
+            recon = f'<div class="empty">{note}</div>'
+        else:
+            recon = svg(p)
+        rows.append(f'<div class="cmp">{o}<figure><figcaption>pdfmuse 坐标还原</figcaption>{recon}</figure></div>')
     return f'<section><h2>{esc(name)}</h2><div class="sub">{stats}</div>{"".join(rows)}<details><summary>结构化 Markdown</summary><div class="md">{md_html(md)}</div></details></section>'
 
 
@@ -126,6 +132,7 @@ section h2{font-size:15px;margin:0;word-break:break-all}.sub{color:var(--muted);
 figure{margin:0}figcaption{font-size:11px;color:var(--muted);margin-bottom:5px}
 figure img,svg.page{width:100%;height:auto;border:1px solid var(--line);border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
 svg.page text{fill:#111;font-family:"PingFang SC","Microsoft YaHei",serif}
+.empty{border:1px dashed #f59e0b;border-radius:6px;background:#fffbeb;color:#b45309;font-size:13px;display:flex;align-items:center;justify-content:center;min-height:180px;text-align:center;padding:20px}
 details{margin-top:8px}summary{cursor:pointer;font-size:13px;font-weight:600;color:#334155}
 .md{margin-top:10px;font-size:12.5px;line-height:1.6;max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--bg)}
 .md h3{font-size:15px}.md h4{font-size:13px}.md p{margin:.35em 0}.md table{border-collapse:collapse;margin:8px 0}.md td{border:1px solid var(--line);padding:3px 7px;font-size:12px}

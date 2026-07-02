@@ -47,6 +47,13 @@ pub(super) fn cluster_lines(chars: &[Char], skip: &[bool]) -> Vec<TextLine> {
 fn build_line(chars: &[Char], mut members: Vec<usize>) -> TextLine {
     members.sort_by(|&a, &b| cmp(chars[a].bbox.x0, chars[b].bbox.x0));
 
+    // Letter-spaced (tracked) lines have a large, *uniform* gap between every
+    // glyph — inserting a space at each would shatter words ("W e l c o m e").
+    // When the median inter-glyph gap is clearly positive (tracking), raise the
+    // space threshold by that amount so only genuine word breaks trigger. Normal
+    // lines (glyphs abut, median ≈ 0) get no bump → byte-identical output.
+    let tracking = tracking_gap(chars, &members);
+
     let mut text = String::new();
     let mut bbox: Option<BBox> = None;
     let mut prev_x1: Option<f32> = None;
@@ -54,7 +61,7 @@ fn build_line(chars: &[Char], mut members: Vec<usize>) -> TextLine {
     for &i in &members {
         let c = &chars[i];
         if let Some(px1) = prev_x1 {
-            if c.bbox.x0 - px1 > SPACE_GAP * c.size.max(1.0) {
+            if c.bbox.x0 - px1 > SPACE_GAP * c.size.max(1.0) + tracking {
                 text.push(' ');
             }
         }
@@ -75,6 +82,29 @@ fn build_line(chars: &[Char], mut members: Vec<usize>) -> TextLine {
         bbox: bbox.unwrap_or_default(),
         text,
         chars: members.into_iter().map(|i| i as u32).collect(),
+    }
+}
+
+/// The line's letter-tracking gap: the median inter-glyph gap when it is clearly
+/// positive (a letter-spaced line), else `0.0`. Returning `0.0` for ordinary
+/// lines (glyphs abut) keeps their space insertion, and thus output, unchanged.
+fn tracking_gap(chars: &[Char], members: &[usize]) -> f32 {
+    // Need enough glyphs for a robust median; a short line's median is easily
+    // dominated by one real word gap (false "tracking").
+    if members.len() < 8 {
+        return 0.0;
+    }
+    let mut gaps: Vec<f32> =
+        members.windows(2).map(|w| chars[w[1]].bbox.x0 - chars[w[0]].bbox.x1).collect();
+    gaps.sort_by(f32::total_cmp);
+    let median = gaps[gaps.len() / 2];
+    let size = chars[members[0]].size.max(1.0);
+    // Only treat as tracking when the *typical* gap is well beyond a normal word
+    // space, so we never disturb ordinary text.
+    if median > SPACE_GAP * size {
+        median
+    } else {
+        0.0
     }
 }
 
