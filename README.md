@@ -123,6 +123,13 @@ const doc = JSON.parse(parse(new Uint8Array(bytes)));
   docs = PdfmuseLoader("report.pdf", mode="elements").load()
   ```
 
+- **LlamaIndex** — [`llama-index-readers-pdfmuse`](integrations/llama-index-pdfmuse): a `PdfmuseReader` with the same modes and section-aware metadata.
+
+  ```python
+  from llama_index.readers.pdfmuse import PdfmuseReader
+  docs = PdfmuseReader(mode="elements").load_data("report.pdf")
+  ```
+
 ## Scope boundary
 
 **In the core (deterministic):** text + coordinates/font/size/color · vector rules & rects · line/paragraph/column clustering · ruled & whitespace-aligned table reconstruction · full DOCX structure · JSON / Markdown / RAG-chunk output.

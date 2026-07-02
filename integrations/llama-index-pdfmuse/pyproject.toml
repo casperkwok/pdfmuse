@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llama-index-readers-pdfmuse"
+version = "0.1.0"
+description = "LlamaIndex reader for pdfmuse — deterministic PDF/DOCX parsing for RAG."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Casper Kwok" }]
+keywords = ["llamaindex", "llama-index", "pdf", "docx", "rag", "llm", "parser", "pdfmuse", "reader"]
+dependencies = [
+    "pdfmuse>=0.1.4",
+    "llama-index-core>=0.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/casperkwok/pdfmuse"
+Repository = "https://github.com/casperkwok/pdfmuse"
+
+[tool.hatch.build.targets.wheel]
+packages = ["llama_index"]

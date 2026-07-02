@@ -123,6 +123,13 @@ const doc = JSON.parse(parse(new Uint8Array(bytes)));
   docs = PdfmuseLoader("report.pdf", mode="elements").load()
   ```
 
+- **LlamaIndex** —— [`llama-index-readers-pdfmuse`](integrations/llama-index-pdfmuse):`PdfmuseReader`,同样的模式与分节元数据。
+
+  ```python
+  from llama_index.readers.pdfmuse import PdfmuseReader
+  docs = PdfmuseReader(mode="elements").load_data("report.pdf")
+  ```
+
 ## 能力边界
 
 **在核心内（确定性）**:文字 + 坐标/字体/字号/颜色 · 矢量线与矩形 · 行/段/分栏聚类 · 有线表格与空白对齐表格重建 · 完整 DOCX 结构 · JSON / Markdown / RAG 分块输出。
