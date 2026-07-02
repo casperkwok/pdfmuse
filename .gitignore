@@ -39,3 +39,5 @@ build/
 # Note: Cargo.lock IS committed (this workspace ships a binary, pdfmuse-cli).
 
 bindings/node/package-lock.json
+bindings/node/npm/
+bindings/node/artifacts/

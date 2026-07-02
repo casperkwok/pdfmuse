@@ -109,22 +109,27 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - working-directory: bindings/node
         run: npm install
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: node-*
-          path: bindings/node
-          merge-multiple: true
+      # native.js loader + index.js (tsc) for the main package.
       - name: build loader + types
         working-directory: bindings/node
         run: npm run build
-      - name: publish platform packages
+      # Each node-<target> artifact lands under artifacts/<name>/native.*.node.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: node-*
+          path: bindings/node/artifacts
+      # Create npm/<platform>/ package dirs, then move each binary into its dir.
+      - name: assemble platform packages
         working-directory: bindings/node
-        run: npx napi prepublish -t npm --skip-gh-release
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: publish main package
+        run: |
+          npx napi create-npm-dir -t .
+          npx napi artifacts --dir artifacts --dist npm
+          ls -R npm
+      - name: publish platform packages + main
         working-directory: bindings/node
-        run: npm publish
+        run: |
+          npx napi prepublish -t npm --skip-gh-release
+          npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
