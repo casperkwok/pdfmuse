@@ -89,7 +89,7 @@ jobs:
         with:
           node-version: 20
       - working-directory: bindings/node
-        run: npm install && npx napi build --release --target ${{ matrix.target }} --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts
+        run: npm install && npx napi build --platform --release --target ${{ matrix.target }} --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts
       - uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.target }}
