@@ -7,6 +7,10 @@
 
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">中文</a></p>
 
+<p align="center">
+  <a href="https://casperkwok.github.io/pdfmuse/"><strong>▶ Live playground</strong></a> — drag a PDF, watch it parse in your browser (nothing is uploaded)
+</p>
+
 **Deterministic PDF/DOCX parser for RAG / LLMs** — one Rust core, with Python, Node & WASM bindings that produce **byte-identical** output.
 
 pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file actually contains — text with exact coordinates, fonts, vector rules, tables, links — fast, robustly, and identically across every binding. It stops cleanly at the ML boundary: OCR and visual layout inference are left to a pluggable backend, so the core stays deterministic with **zero ML dependencies**. It is **not** another probabilistic vision model.
