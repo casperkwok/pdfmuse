@@ -1,0 +1,16 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="pdfmuse">
+  <defs>
+    <linearGradient id="pm-bg" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="84" height="84" rx="22" fill="url(#pm-bg)"/>
+  <!-- extracted, structured text: amber heading + white body lines -->
+  <rect x="24" y="45" width="30" height="6" rx="3" fill="#FBBF24"/>
+  <rect x="24" y="58" width="48" height="5" rx="2.5" fill="#FFFFFF" opacity="0.95"/>
+  <rect x="24" y="68" width="48" height="5" rx="2.5" fill="#FFFFFF" opacity="0.78"/>
+  <rect x="24" y="78" width="28" height="5" rx="2.5" fill="#FFFFFF" opacity="0.62"/>
+  <!-- muse spark -->
+  <path d="M68 16 C69.8 23.8 72.2 26.2 80 28 C72.2 29.8 69.8 32.2 68 40 C66.2 32.2 63.8 29.8 56 28 C63.8 26.2 66.2 23.8 68 16 Z" fill="#FBBF24"/>
+</svg>

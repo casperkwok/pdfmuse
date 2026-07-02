@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pdfmuse playground — deterministic PDF/DOCX parsing in your browser</title>
+<meta name="description" content="Drag a PDF and watch pdfmuse extract text with exact coordinates, tables and structure — running 100% in your browser via WASM. Your file never leaves your device.">
+<link rel="icon" href="./favicon.svg">
+<style>
+ :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f1f5f9;--card:#fff;--indigo:#4f46e5;--blue:#2563eb;--amber:#f59e0b}
+ *{box-sizing:border-box}
+ body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+ header{background:#fff;border-bottom:1px solid var(--line);padding:20px 28px}
+ .top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+ .brand{display:flex;align-items:center;gap:14px}
+ .brand .word{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,monospace;font-size:26px;font-weight:700;letter-spacing:-1px}
+ .brand .word .b{color:var(--indigo)}
+ .pill{font-size:12px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--bg)}
+ .pill.priv{border-color:#6ee7b7;background:#ecfdf5;color:#065f46}
+ .spacer{flex:1}
+ .links{display:flex;gap:16px;font-size:14px}
+ .sub{margin-top:8px;color:var(--muted);font-size:14px}
+ main{max-width:1240px;margin:0 auto;padding:22px 28px 60px}
+ .drop{background:var(--card);border:2px dashed #cbd5e1;border-radius:16px;padding:34px;text-align:center;transition:.15s;cursor:pointer}
+ .drop.hover{border-color:var(--indigo);background:#eef2ff}
+ .drop h2{margin:0 0 6px;font-size:18px}
+ .drop p{margin:4px 0;color:var(--muted);font-size:14px}
+ .samples{margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+ .btn{font-size:13px;padding:8px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;color:var(--ink)}
+ .btn:hover{border-color:var(--indigo);color:var(--indigo)}
+ .btn.primary{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+ #stats{display:none;margin-top:20px;gap:10px;flex-wrap:wrap}
+ #stats.show{display:flex}
+ .stat{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 16px;font-size:13px}
+ .stat b{display:block;font-size:20px;font-family:ui-monospace,monospace}
+ .stat.hi b{color:var(--indigo)}
+ .nav{display:none;margin-top:16px;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+ .nav.show{display:flex}
+ .grid{display:none;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+ .grid.show{display:grid}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+ .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+ .phead{padding:11px 16px;border-bottom:1px solid var(--line);font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+ .phead .tag{font-weight:400;color:var(--muted);font-size:12px}
+ .pbody{padding:14px;overflow:auto;max-height:78vh}
+ canvas,svg.recon{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+ svg.recon text{fill:#0f172a}
+ .tabs{display:none;margin-top:16px}
+ .tabs.show{display:block}
+ .tabbar{display:flex;gap:6px;margin-bottom:10px}
+ .tabbar .t{font-size:13px;padding:7px 14px;border:1px solid var(--line);border-radius:9px 9px 0 0;background:#fff;cursor:pointer;color:var(--muted)}
+ .tabbar .t.active{color:var(--ink);border-bottom-color:#fff;font-weight:600}
+ .tabpane{background:var(--card);border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:16px;max-height:60vh;overflow:auto}
+ .md h1{font-size:20px}.md h2{font-size:17px}.md h3{font-size:15px}
+ .md p{font-size:13.5px;line-height:1.7;margin:.4em 0}
+ .md table{border-collapse:collapse;margin:.6em 0}.md td,.md th{border:1px solid var(--line);padding:5px 12px;font-size:13px}
+ pre{font-family:ui-monospace,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:0}
+ .note{background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:10px;padding:10px 14px;font-size:13px;margin-top:8px}
+ .foot{color:var(--muted);font-size:12.5px;text-align:center;margin-top:34px;line-height:1.8}
+ code.k{font-family:ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#6366F1"/><stop offset="1" stop-color="#2563EB"/></linearGradient></defs><rect x="6" y="6" width="84" height="84" rx="22" fill="url(#g)"/><rect x="24" y="45" width="30" height="6" rx="3" fill="#FBBF24"/><rect x="24" y="58" width="48" height="5" rx="2.5" fill="#fff" opacity=".95"/><rect x="24" y="68" width="48" height="5" rx="2.5" fill="#fff" opacity=".78"/><rect x="24" y="78" width="28" height="5" rx="2.5" fill="#fff" opacity=".62"/><path d="M68 16 C69.8 23.8 72.2 26.2 80 28 C72.2 29.8 69.8 32.2 68 40 C66.2 32.2 63.8 29.8 56 28 C63.8 26.2 66.2 23.8 68 16 Z" fill="#FBBF24"/></svg>
+      <span class="word">pdf<span class="b">muse</span></span>
+    </div>
+    <span class="pill priv">🔒 100% in-browser · your file never leaves your device</span>
+    <span class="spacer"></span>
+    <nav class="links">
+      <a href="https://github.com/casperkwok/pdfmuse" target="_blank">GitHub</a>
+      <a href="https://pypi.org/project/pdfmuse/" target="_blank">PyPI</a>
+      <a href="https://www.npmjs.com/package/@pdfmuse/node" target="_blank">npm</a>
+      <a href="https://crates.io/crates/pdfmuse-core" target="_blank">crates.io</a>
+    </nav>
+  </div>
+  <div class="sub">Deterministic PDF/DOCX parser for RAG / LLMs — exact coordinates, tables, structure. Same core as the Python/Node/Rust packages, compiled to WASM.</div>
+</header>
+
+<main>
+  <div class="drop" id="drop">
+    <h2>Drop a PDF here — or click to choose</h2>
+    <p>Runs entirely in your browser via WebAssembly. Nothing is uploaded.</p>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div class="samples">
+      <span style="align-self:center;color:var(--muted);font-size:13px">or try a sample:</span>
+      <button class="btn" data-s="samples/hello.pdf">text + coordinates</button>
+      <button class="btn" data-s="samples/table.pdf">ruled table</button>
+      <button class="btn" data-s="samples/cjk.pdf">中文 CJK</button>
+    </div>
+  </div>
+
+  <div id="status" class="note" style="display:none"></div>
+
+  <div id="stats">
+    <div class="stat"><b id="s-src">—</b>source</div>
+    <div class="stat"><b id="s-pages">—</b>pages</div>
+    <div class="stat"><b id="s-chars">—</b>characters</div>
+    <div class="stat hi"><b id="s-ms">—</b>parse time</div>
+  </div>
+
+  <div class="nav" id="nav">
+    <button class="btn" id="prev">← prev</button>
+    <span id="pagelabel">page 1</span>
+    <button class="btn" id="next">next →</button>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="panel"><div class="phead">Original PDF <span class="tag">(rendered by pdf.js)</span></div><div class="pbody"><canvas id="orig"></canvas></div></div>
+    <div class="panel"><div class="phead">pdfmuse reconstruction <span class="tag">(from extracted coordinates)</span></div><div class="pbody" id="reconwrap"></div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tabbar">
+      <div class="t active" data-tab="md">Structured Markdown</div>
+      <div class="t" data-tab="json">Raw IR (JSON)</div>
+    </div>
+    <div class="tabpane"><div class="md" id="md-pane"></div><pre id="json-pane" style="display:none"></pre></div>
+  </div>
+
+  <div class="foot">
+    pdfmuse runs the same deterministic Rust core across Python, Node, WASM &amp; Rust — <b>byte-identical output</b>.
+    Scanned/image-only pages return a <code class="k">NeedsOcr</code> warning (OCR is a pluggable backend, out of the core).<br>
+    <code class="k">pip install pdfmuse</code> · <code class="k">npm i @pdfmuse/node</code> · <code class="k">cargo add pdfmuse-core</code>
+  </div>
+</main>
+
+<script type="module">
+import init, { parse } from './vendor/pdfmuse_wasm.js';
+
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ready = init();
+let doc = null, bytes = null, pdfDoc = null, pdfTried = false, page = 0;
+
+function status(msg){ const el=$('#status'); if(!msg){el.style.display='none';return;} el.style.display='block'; el.textContent=msg; }
+
+async function load(buf, name){
+  status('Loading WASM…');
+  try { await ready; } catch(e){ status('Failed to load the WASM module: '+e); return; }
+  status('Parsing…');
+  bytes = new Uint8Array(buf);
+  let json, ms;
+  try { const t=performance.now(); json = parse(bytes); ms = performance.now()-t; }
+  catch(e){ status('parse error: '+e); return; }
+  doc = JSON.parse(json);
+  pdfDoc = null; pdfTried = false; page = 0;
+  status('');
+  // pdfmuse result renders immediately — never blocked by the (optional) pdf.js original render.
+  const chars = doc.pages.reduce((a,p)=>a+p.chars.length,0);
+  $('#s-src').textContent = doc.source; $('#s-pages').textContent = doc.pages.length;
+  $('#s-chars').textContent = chars.toLocaleString(); $('#s-ms').textContent = (ms<10?ms.toFixed(2):ms.toFixed(1))+' ms';
+  $('#stats').classList.add('show');
+  $('#tabs').classList.add('show');
+  $('#grid').classList.add('show');
+  $('#nav').classList.toggle('show', doc.pages.length>1);
+  if (chars===0 && (doc.warnings||[]).some(w=>JSON.stringify(w).includes('Ocr')))
+    status('This page has no text layer (scanned/image PDF) → pdfmuse returns a NeedsOcr warning. OCR is a pluggable backend, outside the deterministic core.');
+  render();
+}
+
+// pdf.js is loaded lazily from a CDN only to render the "original" preview. If it
+// is unavailable, the pdfmuse output is unaffected.
+async function ensurePdf(){
+  if (pdfDoc || pdfTried) return;
+  pdfTried = true;
+  try {
+    const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs';
+    pdfDoc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  } catch(e){ pdfDoc = null; }
+}
+
+function render(){
+  const p = doc.pages[page];
+  $('#pagelabel').textContent = `page ${page+1} / ${doc.pages.length}`;
+  reconSVG(p);
+  markdown(p);
+  $('#json-pane').textContent = JSON.stringify(p, null, 1);
+  renderOriginal();
+}
+
+function reconSVG(p){
+  const w=p.width, h=p.height, e=[`<rect width="${w}" height="${h}" fill="#fff"/>`];
+  for(const r of (p.rules||[])) e.push(`<line x1="${r.x0}" y1="${r.y0}" x2="${r.x1}" y2="${r.y1}" stroke="#2563eb" stroke-width="${Math.max(0.4,r.width||0.6)}"/>`);
+  for(const c of p.chars){ const b=c.bbox, sz=Math.max(4,b.y1-b.y0); e.push(`<text x="${b.x0}" y="${b.y1-sz*0.13}" font-size="${sz}" font-family="'PingFang SC','Microsoft YaHei',serif">${esc(c.text)}</text>`); }
+  $('#reconwrap').innerHTML = `<svg class="recon" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">${e.join('')}</svg>`;
+}
+
+function markdown(p){
+  const out=[];
+  for(const blk of (p.blocks||[])){
+    if(blk.Paragraph){ const q=blk.Paragraph; const lv=q.heading_level; out.push(lv?`<h${Math.min(lv,4)}>${esc(q.text)}</h${Math.min(lv,4)}>`:`<p>${esc(q.text)}</p>`); }
+    else if(blk.Table){ const rows=blk.Table.rows||[]; const tr=rows.map(r=>'<tr>'+r.map(c=>`<td>${esc(c.text||'')}</td>`).join('')+'</tr>').join(''); out.push(`<table>${tr}</table>`); }
+  }
+  $('#md-pane').innerHTML = out.join('\n') || '<p style="color:#94a3b8">No structured text blocks on this page.</p>';
+}
+
+async function renderOriginal(){
+  const cv=$('#orig');
+  await ensurePdf();
+  if(!pdfDoc){
+    cv.style.display='none';
+    let n=$('#orig-note');
+    if(!n){ n=document.createElement('div'); n.id='orig-note'; n.className='note'; n.style.margin='0'; cv.parentNode.appendChild(n); }
+    n.textContent='Original preview needs pdf.js (loaded from a CDN) — unavailable here. The reconstruction on the right is pdfmuse’s actual output.';
+    return;
+  }
+  cv.style.display=''; const old=$('#orig-note'); if(old) old.remove();
+  try{
+    const pg=await pdfDoc.getPage(page+1);
+    const vp0=pg.getViewport({scale:1});
+    const scale=Math.min(2, 620/vp0.width);
+    const vp=pg.getViewport({scale});
+    cv.width=vp.width; cv.height=vp.height;
+    await pg.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise;
+  }catch(e){ /* ignore */ }
+}
+
+// ---- wiring ----
+const drop=$('#drop'), file=$('#file');
+drop.onclick=()=>file.click();
+file.onchange=e=>{ const f=e.target.files[0]; if(f) f.arrayBuffer().then(b=>load(b,f.name)); };
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hover');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hover');}));
+drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) f.arrayBuffer().then(b=>load(b,f.name)); });
+document.querySelectorAll('.samples .btn').forEach(b=>b.onclick=async e=>{ e.stopPropagation(); const r=await fetch(b.dataset.s); load(await r.arrayBuffer(), b.dataset.s); });
+$('#prev').onclick=()=>{ if(page>0){page--;render();} };
+$('#next').onclick=()=>{ if(page<doc.pages.length-1){page++;render();} };
+// shareable deep link: ?sample=hello|table|cjk auto-loads that sample
+const q=new URLSearchParams(location.search).get('sample');
+if(q && /^[a-z0-9_-]+$/i.test(q)) fetch(`samples/${q}.pdf`).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(b=>load(b,q)).catch(()=>{});
+document.querySelectorAll('.tabbar .t').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tabbar .t').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  const md=t.dataset.tab==='md'; $('#md-pane').style.display=md?'':'none'; $('#json-pane').style.display=md?'none':'';
+});
+</script>
+</body>
+</html>
