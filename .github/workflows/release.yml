@@ -66,8 +66,9 @@ jobs:
         with:
           skip-existing: true
 
-  # Build the native .node per platform (host targets — no cross-compile). arm64
-  # Linux + musl can be added later via cross/docker.
+  # Build the native .node per target. Both macOS targets build on the arm64
+  # runner (x86_64 via cross-compile) so we don't depend on scarce Intel-mac
+  # runners. arm64 Linux + musl can be added later via cross/docker.
   node:
     needs: check-version
     strategy:
@@ -75,8 +76,8 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-          - { os: macos-13, target: x86_64-apple-darwin }
           - { os: macos-14, target: aarch64-apple-darwin }
+          - { os: macos-14, target: x86_64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
@@ -88,7 +89,7 @@ jobs:
         with:
           node-version: 20
       - working-directory: bindings/node
-        run: npm install && npm run build:native
+        run: npm install && npx napi build --release --target ${{ matrix.target }} --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts
       - uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.target }}

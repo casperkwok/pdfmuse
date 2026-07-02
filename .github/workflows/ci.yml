@@ -28,15 +28,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-13, macos-14, windows-latest]
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: macos-14, target: aarch64-apple-darwin }
+          - { os: macos-14, target: x86_64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - working-directory: bindings/node
-        run: npm install && npm run build:native
-      - working-directory: bindings/node
+        run: npm install && npx napi build --release --target ${{ matrix.target }} --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts
+      # Smoke-test only the host-native build (a cross-compiled binary won't load here).
+      - if: matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'x86_64-pc-windows-msvc'
+        working-directory: bindings/node
         run: node -e "const n=require('./native.js'); const fs=require('fs'); const d=JSON.parse(n.parse_buffer(fs.readFileSync('../../tests/corpus/hello.pdf'))); if(d.source!=='Pdf') process.exit(1); console.log('ok:', d.source)"
