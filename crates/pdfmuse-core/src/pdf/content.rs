@@ -333,6 +333,11 @@ fn show(
                 // Text rendering matrix: [fs*h 0 0 fs 0 rise] · Tm · CTM.
                 let params = [st.font_size * st.h_scale, 0.0, 0.0, st.font_size, 0.0, st.rise];
                 let trm = mul(params, mul(st.tm, st.ctm));
+                // Effective on-page size = length of the transformed y-basis. Some
+                // PDFs set a large Tf size and scale it down via the text/CTM
+                // matrix; the raw Tf value would be meaningless (and, fed to the
+                // baseline tolerance, collapses every line into one).
+                let eff_size = (trm[2] * trm[2] + trm[3] * trm[3]).sqrt();
                 // Glyph ink box in text space (em): baseline (0) to one em up.
                 let corners = [
                     apply(&trm, 0.0, 0.0),
@@ -352,7 +357,7 @@ fn show(
                     text: normalize_cjk_compat(t),
                     bbox: BBox { x0, y0, x1, y1 },
                     font: FontRef { name: font.base.clone() },
-                    size: st.font_size,
+                    size: eff_size,
                     color: None,
                 });
             }
