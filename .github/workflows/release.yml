@@ -77,7 +77,7 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
       - working-directory: bindings/node
-        run: npm ci && npm run build:native
+        run: npm install && npm run build:native
       - uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.os }}
@@ -99,6 +99,11 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
       - run: wasm-pack build crates/pdfmuse-wasm --target web --release --out-dir pkg
+      # wasm-pack names the package after the crate (pdfmuse-wasm); publish under
+      # the reserved scoped name instead.
+      - name: rename package to @pdfmuse/core
+        working-directory: crates/pdfmuse-wasm/pkg
+        run: node -e "const f='package.json',p=require('./'+f);p.name='@pdfmuse/core';require('fs').writeFileSync(f,JSON.stringify(p,null,2))"
       - working-directory: crates/pdfmuse-wasm/pkg
         run: npm publish --access public
         env:

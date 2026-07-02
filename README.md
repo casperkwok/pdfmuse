@@ -1,5 +1,7 @@
 # pdfmuse
 
+**English** · [中文](README.zh-CN.md)
+
 **Deterministic PDF/DOCX parser for RAG / LLMs** — one Rust core, with Python, Node & WASM bindings that produce **byte-identical** output.
 
 pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file actually contains — text with exact coordinates, fonts, vector rules, tables, links — fast, robustly, and identically across every binding. It stops cleanly at the ML boundary: OCR and visual layout inference are left to a pluggable backend, so the core stays deterministic with **zero ML dependencies**. It is **not** another probabilistic vision model.
@@ -8,11 +10,11 @@ pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file a
 
 | | |
 |---|---|
-| **全 Complete** | Keeps the finest-grained chars + coordinates; never silently drops content. |
-| **快 Fast** | Zero-copy streaming Rust core with a custom O(1) object parser + content tokenizer and per-page parallelism. |
-| **稳 Robust** | A broken page/object never sinks the doc — returns structured errors, never panics (fuzz-tested). |
-| **确定 Deterministic** | Same input → same output. No probabilistic models, no time/RNG in the core path. |
-| **一致 Consistent** | Python / Node / WASM call one Rust core; output is **byte-identical** (CI-enforced). |
+| **Complete** | Keeps the finest-grained chars + coordinates; never silently drops content. |
+| **Fast** | Zero-copy streaming Rust core with a custom O(1) object parser + content tokenizer and per-page parallelism. |
+| **Robust** | A broken page/object never sinks the doc — returns structured errors, never panics (fuzz-tested). |
+| **Deterministic** | Same input → same output. No probabilistic models, no time/RNG in the core path. |
+| **Consistent** | Python / Node / WASM call one Rust core; output is **byte-identical** (CI-enforced). |
 | **CJK first-class** | CID/Type0 fonts + CMap/ToUnicode in the main path; compatibility codepoints NFKC-normalized for clean search. |
 
 ## Performance
