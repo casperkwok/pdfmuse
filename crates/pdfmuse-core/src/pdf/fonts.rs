@@ -58,6 +58,12 @@ impl Font {
 
         let names = encoding_names(doc, dict, &base);
         let widths = resolve_widths(doc, dict, &base, &names);
+        // Widths are stored in 1/1000 em. Type1/TrueType /Widths already use that
+        // unit (factor 1.0). Type3 fonts express widths in their /FontMatrix glyph
+        // space, so convert with FontMatrix x-scale × 1000 — otherwise the widths
+        // are ~1000× too small and every glyph's advance collapses to zero (all
+        // text stacks at one x). Normal fonts multiply by exactly 1.0 → unchanged.
+        let wfactor = type3_width_factor(doc, dict);
         // A /ToUnicode CMap, when present, is the authoritative code → text map.
         let to_unicode = to_unicode_map(doc, dict);
 
@@ -67,7 +73,7 @@ impl Font {
                     .as_ref()
                     .and_then(|m| m.get(&(c as u32)).cloned())
                     .or_else(|| name_to_unicode(&names[c])),
-                width: widths[c],
+                width: widths[c] * wfactor,
             })
             .collect();
         Font { code_bytes: 1, kind: FontKind::Simple(glyphs), base, unmapped_cid: false }
@@ -258,6 +264,24 @@ fn name_to_unicode(name: &str) -> Option<String> {
 }
 
 /// Advance widths (1/1000 em) for codes 0..=255.
+/// Factor to bring a simple font's `/Widths` into the 1/1000-em unit the rest of
+/// the pipeline assumes. Type1/TrueType have no `/FontMatrix` (already 1/1000 →
+/// `1.0`); Type3 declares one, and its widths are in that glyph space, so
+/// `FontMatrix[0] × 1000` converts them. Returning exactly `1.0` for the common
+/// case keeps output byte-identical.
+fn type3_width_factor(doc: &Document, dict: &Dictionary) -> f32 {
+    let Ok(m) = dict.get(b"FontMatrix") else {
+        return 1.0;
+    };
+    let Ok(arr) = deref(doc, m).as_array() else {
+        return 1.0;
+    };
+    match arr.first().map(number) {
+        Some(sx) if sx != 0.0 => sx * 1000.0,
+        _ => 1.0,
+    }
+}
+
 fn resolve_widths(doc: &Document, dict: &Dictionary, base: &str, names: &[String]) -> Vec<f32> {
     let first_char = dict.get(b"FirstChar").ok().and_then(|o| o.as_i64().ok()).unwrap_or(0);
     let missing = dict
