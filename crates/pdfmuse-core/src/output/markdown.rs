@@ -23,6 +23,33 @@ pub fn to_markdown(doc: &Document) -> String {
     blocks.join("\n\n")
 }
 
+/// Render `doc` to plain reading-order text — no Markdown syntax, just the block
+/// text joined by newlines. The cheapest useful output for search / ATS / feeding
+/// an LLM, and (via the bindings) avoids materializing the full IR on the host.
+pub fn to_text(doc: &Document) -> String {
+    let mut blocks = Vec::new();
+    for page in &doc.pages {
+        for block in &page.blocks {
+            match block {
+                Block::Paragraph(p) => blocks.push(p.text.clone()),
+                Block::Table(t) => blocks.push(table_text(t)),
+                Block::Image(_) => {}
+            }
+        }
+    }
+    blocks.join("\n")
+}
+
+/// A table as plain text: cells space-joined per row, rows newline-joined.
+fn table_text(table: &Table) -> String {
+    table
+        .rows
+        .iter()
+        .map(|row| row.iter().map(|c| c.text.as_str()).collect::<Vec<_>>().join(" "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A heading paragraph becomes `#`-prefixed; a normal one is its text verbatim.
 fn paragraph_md(p: &Paragraph) -> String {
     match p.heading_level {

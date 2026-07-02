@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 from . import _native
 
-__all__ = ["parse", "Document", "Page"]
+__all__ = ["parse", "to_text", "to_markdown", "Document", "Page"]
 
 
 @dataclass
@@ -55,3 +55,19 @@ def parse(data: bytes, fmt: Optional[str] = None) -> Document:
         outline=raw["outline"],
         warnings=raw["warnings"],
     )
+
+
+def to_text(data: bytes, fmt: Optional[str] = None) -> str:
+    """Parse and return plain reading-order text.
+
+    Faster than ``parse`` when you only need text: the Rust core returns one
+    string, so nothing is deserialized on the Python side (no ``json.loads`` of
+    the full IR). ``fmt`` forces ``"pdf"``/``"docx"``; ``None`` auto-detects.
+    """
+    return _native.text_bytes(bytes(data), fmt)
+
+
+def to_markdown(data: bytes, fmt: Optional[str] = None) -> str:
+    """Parse and return structured Markdown (headings + tables), returned as one
+    string from the Rust core — same speed benefit as :func:`to_text`."""
+    return _native.markdown_bytes(bytes(data), fmt)

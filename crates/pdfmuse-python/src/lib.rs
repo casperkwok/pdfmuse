@@ -33,8 +33,45 @@ fn parse_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<Str
     serde_json::to_string(&doc).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
+fn parse_format(fmt: Option<&str>) -> PyResult<Option<Format>> {
+    match fmt {
+        None => Ok(None),
+        Some("pdf") => Ok(Some(Format::Pdf)),
+        Some("docx") => Ok(Some(Format::Docx)),
+        Some(other) => Err(PyValueError::new_err(format!("unknown format: {other}"))),
+    }
+}
+
+/// Parse `data` and return plain reading-order text. Avoids materializing the full
+/// IR on the Python side (no `json.loads`), so the text path keeps the Rust speed.
+#[pyfunction]
+#[pyo3(signature = (data, fmt=None))]
+fn text_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<String> {
+    let format = parse_format(fmt.as_deref())?;
+    let owned = data.to_vec();
+    let doc = py
+        .allow_threads(move || pdfmuse_core::parse(&owned, format))
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(pdfmuse_core::to_text(&doc))
+}
+
+/// Parse `data` and return structured Markdown (headings + tables) — a single Rust
+/// call returning one string, no per-object materialization on the Python side.
+#[pyfunction]
+#[pyo3(signature = (data, fmt=None))]
+fn markdown_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<String> {
+    let format = parse_format(fmt.as_deref())?;
+    let owned = data.to_vec();
+    let doc = py
+        .allow_threads(move || pdfmuse_core::parse(&owned, format))
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(pdfmuse_core::to_markdown(&doc))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(text_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(markdown_bytes, m)?)?;
     Ok(())
 }

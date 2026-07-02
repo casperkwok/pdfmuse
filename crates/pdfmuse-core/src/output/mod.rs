@@ -12,7 +12,7 @@ mod markdown;
 
 pub use chunk::{chunk, Chunk};
 pub use json::to_json;
-pub use markdown::to_markdown;
+pub use markdown::{to_markdown, to_text};
 
 #[cfg(test)]
 mod tests {

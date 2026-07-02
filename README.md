@@ -53,6 +53,8 @@ Two things matter for a RAG pre-layer: how fast, and whether it keeps the conten
 | PyMuPDF — mature C library | ~6.8 ms |
 | pdfplumber — Python, common RAG choice | ~91 ms |
 
+For the text path use **`to_text()` / `to_markdown()`** — they return a string straight from the Rust core, so Python and Node keep that ~1.3 ms speed (~4× PyMuPDF). `parse()` returns the full IR (chars + coordinates), which adds host-side deserialization if you consume it as objects.
+
 **Across 22 real-world PDFs** (resumes, reports, invoices; median of 7 runs, core-to-core, each returning a string):
 
 | vs | result |

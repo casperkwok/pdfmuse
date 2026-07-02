@@ -13,7 +13,7 @@ mod output;
 mod pdf;
 
 pub use error::{PdfmuseError, Result};
-pub use output::{chunk, to_json, to_markdown, Chunk};
+pub use output::{chunk, to_json, to_markdown, to_text, Chunk};
 
 /// Source-format hint for [`parse`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
