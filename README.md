@@ -11,6 +11,10 @@
   <a href="https://casperkwok.github.io/pdfmuse/"><strong>▶ Live playground</strong></a> — drag a PDF, watch it parse in your browser (nothing is uploaded)
 </p>
 
+<p align="center">
+  <a href="https://casperkwok.github.io/pdfmuse/"><img src="assets/pdfmuse.gif" alt="pdfmuse playground: original PDF ↔ pdfmuse reconstruction" width="760"></a>
+</p>
+
 **Deterministic PDF/DOCX parser for RAG / LLMs** — one Rust core, with Python, Node & WASM bindings that produce **byte-identical** output.
 
 pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file actually contains — text with exact coordinates, fonts, vector rules, tables, links — fast, robustly, and identically across every binding. It stops cleanly at the ML boundary: OCR and visual layout inference are left to a pluggable backend, so the core stays deterministic with **zero ML dependencies**. It is **not** another probabilistic vision model.
@@ -88,6 +92,15 @@ import init, { parse } from "@pdfmuse/core";
 await init();
 const doc = JSON.parse(parse(new Uint8Array(bytes)));
 ```
+
+## Integrations
+
+- **LangChain** — [`langchain-pdfmuse`](integrations/langchain-pdfmuse): a `PdfmuseLoader` with `single` / `page` / `elements` modes. In `elements` mode each chunk carries section-aware metadata (`heading_path`, `bbox`, `category`) — reproducible chunks for RAG.
+
+  ```python
+  from langchain_pdfmuse import PdfmuseLoader
+  docs = PdfmuseLoader("report.pdf", mode="elements").load()
+  ```
 
 ## Scope boundary
 

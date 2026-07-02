@@ -11,6 +11,10 @@
   <a href="https://casperkwok.github.io/pdfmuse/"><strong>▶ 在线体验</strong></a> —— 拖一个 PDF,在浏览器里实时解析(文件不上传)
 </p>
 
+<p align="center">
+  <a href="https://casperkwok.github.io/pdfmuse/"><img src="assets/pdfmuse.gif" alt="pdfmuse playground:原图 ↔ pdfmuse 坐标还原" width="760"></a>
+</p>
+
 **面向 RAG / LLM 的确定性 PDF/DOCX 解析器** —— 单一 Rust 核心,配 Python、Node、WASM 三端绑定,输出**逐字节一致**。
 
 pdfmuse 是给 AI/RAG 的**精确前置层**:把文件里真正含有的东西都抽出来——带精确坐标的文字、字体、矢量线、表格、链接——又快、又稳、且**每个绑定输出完全一致**。它在 ML 边界干净收手:OCR 与视觉版面推断交给可插拔后端,核心保持确定性、**零 ML 依赖**。它**不是**又一个概率性视觉模型。
@@ -88,6 +92,15 @@ import init, { parse } from "@pdfmuse/core";
 await init();
 const doc = JSON.parse(parse(new Uint8Array(bytes)));
 ```
+
+## 生态集成
+
+- **LangChain** —— [`langchain-pdfmuse`](integrations/langchain-pdfmuse):`PdfmuseLoader`,支持 `single` / `page` / `elements` 模式。`elements` 模式下每个 chunk 带**分节元数据**(`heading_path`、`bbox`、`category`)—— 给 RAG 的可复现分块。
+
+  ```python
+  from langchain_pdfmuse import PdfmuseLoader
+  docs = PdfmuseLoader("report.pdf", mode="elements").load()
+  ```
 
 ## 能力边界
 
