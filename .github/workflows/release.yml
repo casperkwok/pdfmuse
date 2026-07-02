@@ -66,12 +66,39 @@ jobs:
         with:
           skip-existing: true
 
+  # Build the native .node per platform (host targets — no cross-compile). arm64
+  # Linux + musl can be added later via cross/docker.
   node:
     needs: check-version
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: macos-13, target: x86_64-apple-darwin }
+          - { os: macos-14, target: aarch64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - working-directory: bindings/node
+        run: npm install && npm run build:native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-${{ matrix.target }}
+          path: bindings/node/native.*.node
+
+  # Collect every platform binary, then publish the @pdfmuse/node-<triple> platform
+  # packages (napi prepublish) + the main @pdfmuse/node package.
+  node-publish:
+    needs: node
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -80,13 +107,25 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
       - working-directory: bindings/node
-        run: npm install && npm run build:native
-      - uses: actions/upload-artifact@v4
+        run: npm install
+      - uses: actions/download-artifact@v4
         with:
-          name: node-${{ matrix.os }}
-          path: bindings/node/*.node
-      # Publishing the platform packages + optionalDependencies is finalized via
-      # napi-rs's `napi prepublish` once the full target matrix is set.
+          pattern: node-*
+          path: bindings/node
+          merge-multiple: true
+      - name: build loader + types
+        working-directory: bindings/node
+        run: npm run build
+      - name: publish platform packages
+        working-directory: bindings/node
+        run: npx napi prepublish -t npm --skip-gh-release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: publish main package
+        working-directory: bindings/node
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   wasm:
     needs: check-version

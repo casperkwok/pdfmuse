@@ -36,7 +36,7 @@ cargo add pdfmuse-core
 # Python(abi3 wheels)
 pip install pdfmuse
 # Node（原生绑定）
-npm install pdfmuse
+npm install @pdfmuse/node
 # WASM（浏览器）
 npm install @pdfmuse/core   # 或自行构建：wasm-pack build crates/pdfmuse-wasm --target web
 ```
@@ -69,7 +69,7 @@ text = "".join(c.text for pg in doc.pages for c in pg.chars)
 
 **Node**:
 ```js
-const { parse_buffer } = require("pdfmuse");
+const { parse_buffer } = require("@pdfmuse/node");
 const doc = JSON.parse(parse_buffer(fs.readFileSync("report.pdf")));
 ```
 

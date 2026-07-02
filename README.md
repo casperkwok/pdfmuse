@@ -36,7 +36,7 @@ cargo add pdfmuse-core
 # Python (abi3 wheels)
 pip install pdfmuse
 # Node
-npm install pdfmuse         # native binding
+npm install @pdfmuse/node   # native binding
 # WASM (browser)
 npm install @pdfmuse/core   # or build: wasm-pack build crates/pdfmuse-wasm --target web
 ```
@@ -69,7 +69,7 @@ text = "".join(c.text for pg in doc.pages for c in pg.chars)
 
 **Node**:
 ```js
-const { parse_buffer } = require("pdfmuse");
+const { parse_buffer } = require("@pdfmuse/node");
 const doc = JSON.parse(parse_buffer(fs.readFileSync("report.pdf")));
 ```
 

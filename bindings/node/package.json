@@ -1,14 +1,33 @@
 {
-  "name": "pdfmuse",
+  "name": "@pdfmuse/node",
   "version": "0.1.0",
-  "description": "Deterministic PDF/DOCX parser for RAG / LLMs — Node.js binding.",
-  "private": true,
+  "description": "Deterministic PDF/DOCX parser for RAG / LLMs — native Node.js binding.",
   "license": "MIT OR Apache-2.0",
+  "repository": "https://github.com/casperkwok/pdfmuse",
   "main": "index.js",
   "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "native.js",
+    "native.d.ts"
+  ],
   "napi": {
     "name": "native",
-    "binaryName": "native"
+    "binaryName": "native",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2",
