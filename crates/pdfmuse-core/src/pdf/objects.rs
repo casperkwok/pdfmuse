@@ -12,21 +12,37 @@ use std::collections::BTreeMap;
 
 use lopdf::{Document as LoDoc, Object, ObjectId};
 
+use super::lazy;
+use super::object_parser::ObjParser;
 use crate::error::{PdfmuseError, Result};
 use crate::ir::{Warning, WarningKind};
 
-pub(crate) struct PdfDoc {
+pub(crate) struct PdfDoc<'a> {
     pub(crate) inner: LoDoc,
+    /// In lazy mode: the `%PDF-`-onward bytes, for resolving skipped objects
+    /// (e.g. an image dict for scanned-page detection) on demand. `None` when
+    /// loaded eagerly.
+    buffer: Option<&'a [u8]>,
 }
 
-impl PdfDoc {
+impl<'a> PdfDoc<'a> {
     /// Load bytes, decrypt if needed, and run the validation pass. Returns the
     /// wrapped document plus any non-fatal warnings; a broken container or a
     /// failed decryption is a fatal `Err`.
     ///
-    /// Decryption happens *before* validation so encrypted streams are not
-    /// false-flagged as malformed. The password is never logged.
-    pub(crate) fn load(data: &[u8], password: Option<&str>) -> Result<(Self, Vec<Warning>)> {
+    /// Tries the fast lazy path first (classic xref, unencrypted); anything it
+    /// can't handle falls back to lopdf's eager `load_mem`. Decryption happens
+    /// *before* validation so encrypted streams are not false-flagged as
+    /// malformed. The password is never logged.
+    pub(crate) fn load(data: &'a [u8], password: Option<&str>) -> Result<(Self, Vec<Warning>)> {
+        if password.is_none() {
+            if let Some(inner) = lazy::try_load(data) {
+                let start = data.windows(5).position(|w| w == b"%PDF-").unwrap_or(0);
+                let buffer = &data[start..];
+                let warnings = validate_lazy(&inner, buffer);
+                return Ok((Self { inner, buffer: Some(buffer) }, warnings));
+            }
+        }
         let mut inner = LoDoc::load_mem(data).map_err(|e| PdfmuseError::Malformed(e.to_string()))?;
         if inner.is_encrypted() {
             // Try the given password, else the empty user password (common default).
@@ -35,7 +51,20 @@ impl PdfDoc {
                 .map_err(|_| PdfmuseError::EncryptedNoPassword)?;
         }
         let warnings = validate(&inner);
-        Ok((Self { inner }, warnings))
+        Ok((Self { inner, buffer: None }, warnings))
+    }
+
+    /// Resolve a reference to an owned object, parsing on demand (lazy mode) for
+    /// objects that were skipped during load (images/form XObjects).
+    fn resolve(&self, obj: &Object) -> Option<Object> {
+        let Object::Reference(id) = obj else {
+            return Some(obj.clone());
+        };
+        if let Ok(o) = self.inner.get_object(*id) {
+            return Some(o.clone());
+        }
+        let buf = self.buffer?;
+        ObjParser::new(buf, &self.inner.reference_table).resolve(*id)
     }
 
     pub(crate) fn pages(&self) -> BTreeMap<u32, ObjectId> {
@@ -71,7 +100,9 @@ impl PdfDoc {
     }
 
     /// Does the page reference an image XObject? A page with images but no text
-    /// is a scanned page that needs OCR (a pluggable-backend job).
+    /// is a scanned page that needs OCR (a pluggable-backend job). Image objects
+    /// are resolved on demand here (in lazy mode they were skipped during load) —
+    /// only reached for text-less pages, so the common case stays fast.
     pub(crate) fn page_has_image(&self, page_id: ObjectId) -> bool {
         let Some(res) = self.page_resources(page_id) else {
             return false;
@@ -79,13 +110,14 @@ impl PdfDoc {
         let Ok(xobj) = res.get(b"XObject") else {
             return false;
         };
-        let resolved = self.inner.dereference(xobj).map(|(_, o)| o).unwrap_or(xobj);
+        let Some(resolved) = self.resolve(xobj) else {
+            return false;
+        };
         let Ok(dict) = resolved.as_dict() else {
             return false;
         };
         dict.iter().any(|(_, v)| {
-            let obj = self.inner.dereference(v).map(|(_, o)| o).unwrap_or(v);
-            matches!(obj, Object::Stream(s)
+            matches!(self.resolve(v), Some(Object::Stream(s))
                 if s.dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()) == Some(b"Image".as_ref()))
         })
     }
@@ -150,6 +182,47 @@ fn scan(doc: &LoDoc, owner: ObjectId, obj: &Object, out: &mut Vec<Warning>) {
 
 fn malformed(detail: String) -> Warning {
     Warning { page: None, kind: WarningKind::MalformedObject, detail }
+}
+
+/// Validation for the lazy backend. Scans the resolved (text-reachable) objects
+/// for references; a reference is dangling iff its target is neither already
+/// resolved nor parseable on demand — matching the eager pass's "missing object"
+/// warning. References under skipped keys (image/form XObjects, font programs) are
+/// not checked: those objects exist in the xref, we just never materialize them.
+fn validate_lazy(doc: &LoDoc, buf: &[u8]) -> Vec<Warning> {
+    let parser = ObjParser::new(buf, &doc.reference_table);
+    let mut warnings = Vec::new();
+    for (id, obj) in &doc.objects {
+        scan_lazy(doc, &parser, *id, obj, &mut warnings);
+    }
+    warnings
+}
+
+fn scan_lazy(doc: &LoDoc, parser: &ObjParser, owner: ObjectId, obj: &Object, out: &mut Vec<Warning>) {
+    match obj {
+        Object::Reference(rid) => {
+            let resolvable = doc.objects.contains_key(rid) || parser.resolve(*rid).is_some();
+            if !resolvable {
+                out.push(malformed(format!(
+                    "object {}:{} references missing object {}:{}",
+                    owner.0, owner.1, rid.0, rid.1
+                )));
+            }
+        }
+        Object::Array(items) => items.iter().for_each(|it| scan_lazy(doc, parser, owner, it, out)),
+        Object::Dictionary(d) => scan_lazy_dict(doc, parser, owner, d, out),
+        Object::Stream(s) => scan_lazy_dict(doc, parser, owner, &s.dict, out),
+        _ => {}
+    }
+}
+
+fn scan_lazy_dict(doc: &LoDoc, parser: &ObjParser, owner: ObjectId, dict: &lopdf::Dictionary, out: &mut Vec<Warning>) {
+    for (key, value) in dict.iter() {
+        if lazy::is_skipped_key(key) {
+            continue;
+        }
+        scan_lazy(doc, parser, owner, value, out);
+    }
 }
 
 #[cfg(test)]

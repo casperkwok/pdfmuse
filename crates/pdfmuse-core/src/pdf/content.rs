@@ -69,7 +69,7 @@ pub(crate) struct PageContent {
 /// `page_height` (PDF points) flips PDF's bottom-left origin to the IR's
 /// top-left, Y-down convention.
 pub(crate) fn extract_page(
-    pdf: &PdfDoc,
+    pdf: &PdfDoc<'_>,
     page_id: ObjectId,
     page_index: u32,
     page_height: f32,
@@ -371,7 +371,7 @@ fn show(
 }
 
 /// Build `resource name -> Font` for a page.
-fn build_fonts(pdf: &PdfDoc, page_id: ObjectId) -> BTreeMap<Vec<u8>, Font> {
+fn build_fonts(pdf: &PdfDoc<'_>, page_id: ObjectId) -> BTreeMap<Vec<u8>, Font> {
     let mut map = BTreeMap::new();
     let Some(res) = pdf.page_resources(page_id) else {
         return map;
@@ -389,7 +389,7 @@ fn build_fonts(pdf: &PdfDoc, page_id: ObjectId) -> BTreeMap<Vec<u8>, Font> {
     map
 }
 
-fn deref<'a>(pdf: &'a PdfDoc, o: &'a Object) -> &'a Object {
+fn deref<'a>(pdf: &'a PdfDoc<'_>, o: &'a Object) -> &'a Object {
     pdf.inner.dereference(o).map(|(_, x)| x).unwrap_or(o)
 }
 

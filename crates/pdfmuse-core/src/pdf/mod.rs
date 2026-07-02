@@ -9,6 +9,8 @@
 mod cmap;
 mod content;
 mod content_lex;
+mod object_parser;
+mod lazy;
 mod fonts;
 mod graphics;
 mod objects;
