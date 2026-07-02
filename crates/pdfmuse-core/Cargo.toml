@@ -28,3 +28,8 @@ rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 insta = "1"
+criterion = "0.5"
+
+[[bench]]
+name = "parse"
+harness = false
