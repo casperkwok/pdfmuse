@@ -19,9 +19,12 @@ use lopdf::{Dictionary, Document as LoDoc, Object, ObjectId};
 use super::object_parser::ObjParser;
 
 /// Keys whose referenced stream bodies we never consume; skipping them is what
-/// makes lazy loading fast and does not change text output.
+/// makes lazy loading fast and does not change text output. `/FontFile*` are glyph
+/// programs (never needed for text). `/XObject` is *not* skipped: form XObjects
+/// carry page text (Canva/PDFium/design tools), and their fonts/ToUnicode must be
+/// resolvable — see `content::run_stream`'s `Do` handling.
 pub(super) fn is_skipped_key(key: &[u8]) -> bool {
-    matches!(key, b"XObject" | b"FontFile" | b"FontFile2" | b"FontFile3")
+    matches!(key, b"FontFile" | b"FontFile2" | b"FontFile3")
 }
 
 /// Try to lazily load `data` into a document holding the full cross-reference

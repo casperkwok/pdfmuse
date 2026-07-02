@@ -56,7 +56,7 @@ impl<'a> PdfDoc<'a> {
 
     /// Resolve a reference to an owned object, parsing on demand (lazy mode) for
     /// objects that were skipped during load (images/form XObjects).
-    fn resolve(&self, obj: &Object) -> Option<Object> {
+    pub(super) fn resolve(&self, obj: &Object) -> Option<Object> {
         let Object::Reference(id) = obj else {
             return Some(obj.clone());
         };

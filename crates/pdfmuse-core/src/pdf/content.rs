@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use lopdf::{Object, ObjectId};
+use lopdf::{Dictionary, Object, ObjectId};
 use unicode_normalization::UnicodeNormalization;
 
 use super::content_lex::{Lexer, Operand, Token};
@@ -83,8 +83,32 @@ pub(crate) fn extract_page(
             return out;
         }
     };
-    let fonts = build_fonts(pdf, page_id);
-    let mut st = GraphicsState::default();
+    let resources = pdf.page_resources(page_id).unwrap_or_default();
+    let fonts = build_fonts_from_resources(pdf, &resources);
+    let mut warned_cid = false;
+    run_stream(
+        pdf, &bytes, &fonts, &resources, GraphicsState::default(),
+        &mut out, page_height, page_index, &mut warned_cid, 0,
+    );
+    out
+}
+
+/// Interpret one content stream (page or form XObject), appending chars/rules to
+/// `out`. Recurses into form XObjects invoked by `Do` (depth-guarded) so text drawn
+/// inside forms — common in Canva / PDFium / design-tool PDFs — is not silently lost.
+#[allow(clippy::too_many_arguments)]
+fn run_stream(
+    pdf: &PdfDoc<'_>,
+    bytes: &[u8],
+    fonts: &BTreeMap<Vec<u8>, Font>,
+    resources: &Dictionary,
+    mut st: GraphicsState,
+    out: &mut PageContent,
+    page_height: f32,
+    page_index: u32,
+    warned_cid: &mut bool,
+    depth: u8,
+) {
     let mut stack: Vec<GraphicsState> = Vec::new();
     let mut path = Path::default();
     // Path geometry is buffered until the painting op: only *stroked* paths become
@@ -92,9 +116,7 @@ pub(crate) fn extract_page(
     // grid lines, so they must not fool ruled-table detection.
     let mut pending_rects: Vec<Rect> = Vec::new();
     let mut pending_rules: Vec<Rule> = Vec::new();
-    let mut warned_cid = false;
-
-    let mut lex = Lexer::new(&bytes);
+    let mut lex = Lexer::new(bytes);
     let mut operands: Vec<Operand> = Vec::new();
     while let Some(tok) = lex.next() {
         let kw = match tok {
@@ -192,22 +214,22 @@ pub(crate) fn extract_page(
             "Tw" => st.word_spacing = num(a, 0),
             "Tz" => st.h_scale = num(a, 0) / 100.0,
             "Ts" => st.rise = num(a, 0),
-            "Tj" => show_operand(a.first(), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
+            "Tj" => show_operand(a.first(), &mut st, fonts, page_height, out, page_index, warned_cid),
             "'" => {
                 st.line_move(0.0, -st.leading);
-                show_operand(a.first(), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid);
+                show_operand(a.first(), &mut st, fonts, page_height, out, page_index, warned_cid);
             }
             "\"" => {
                 st.word_spacing = num(a, 0);
                 st.char_spacing = num(a, 1);
                 st.line_move(0.0, -st.leading);
-                show_operand(a.get(2), &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid);
+                show_operand(a.get(2), &mut st, fonts, page_height, out, page_index, warned_cid);
             }
             "TJ" => {
                 if let Some(Operand::Array(items)) = a.first() {
                     for item in items {
                         match item {
-                            Operand::Str(s) => show(s, &mut st, &fonts, page_height, &mut out, page_index, &mut warned_cid),
+                            Operand::Str(s) => show(s, &mut st, fonts, page_height, out, page_index, warned_cid),
                             Operand::Num(n) => {
                                 // Positive numbers move left (tighten): subtract /1000 * fs.
                                 let adj = -n / 1000.0 * st.font_size * st.h_scale;
@@ -220,12 +242,25 @@ pub(crate) fn extract_page(
             }
             // Inline image: skip the BI..ID..EI binary payload so it is not tokenized.
             "BI" => lex.skip_inline_image(),
+            // Form XObject: recurse into its content stream so text drawn inside a
+            // form (Canva/PDFium/design tools wrap the whole page this way) is
+            // extracted instead of silently dropped.
+            "Do" if depth < 12 => {
+                if let Some((fbytes, fres, fmat)) = resolve_form_xobject(pdf, resources, a.first()) {
+                    let mut child = st.clone();
+                    child.ctm = mul(fmat, st.ctm);
+                    let child_res = fres.unwrap_or_else(|| resources.clone());
+                    let child_fonts = build_fonts_from_resources(pdf, &child_res);
+                    run_stream(
+                        pdf, &fbytes, &child_fonts, &child_res, child,
+                        out, page_height, page_index, warned_cid, depth + 1,
+                    );
+                }
+            }
             _ => {}
         }
         operands.clear();
     }
-
-    out
 }
 
 /// Combined graphics + text state carried through the interpreter.
@@ -376,11 +411,8 @@ fn show(
 }
 
 /// Build `resource name -> Font` for a page.
-fn build_fonts(pdf: &PdfDoc<'_>, page_id: ObjectId) -> BTreeMap<Vec<u8>, Font> {
+fn build_fonts_from_resources(pdf: &PdfDoc<'_>, res: &Dictionary) -> BTreeMap<Vec<u8>, Font> {
     let mut map = BTreeMap::new();
-    let Some(res) = pdf.page_resources(page_id) else {
-        return map;
-    };
     let Ok(fonts_obj) = res.get(b"Font") else {
         return map;
     };
@@ -392,6 +424,62 @@ fn build_fonts(pdf: &PdfDoc<'_>, page_id: ObjectId) -> BTreeMap<Vec<u8>, Font> {
         }
     }
     map
+}
+
+/// Resolve a `Do` operand to a form XObject: `(decoded content, its /Resources, its
+/// /Matrix)`. Returns `None` for image XObjects — they carry no extractable text.
+fn resolve_form_xobject(
+    pdf: &PdfDoc<'_>,
+    resources: &Dictionary,
+    name_op: Option<&Operand>,
+) -> Option<(Vec<u8>, Option<Dictionary>, [f32; 6])> {
+    let name = name_bytes(name_op)?;
+    let xobjs = pdf.resolve(resources.get(b"XObject").ok()?)?;
+    let xobjs = xobjs.as_dict().ok()?;
+    let stream_obj = pdf.resolve(xobjs.get(&name).ok()?)?;
+    let Object::Stream(s) = &stream_obj else {
+        return None;
+    };
+    if s.dict.get(b"Subtype").ok().and_then(|o| o.as_name().ok()) != Some(b"Form".as_ref()) {
+        return None;
+    }
+    // Uncompressed streams: `decompressed_content()` errors when there is no
+    // `/Filter`, so read the raw bytes directly in that case.
+    let bytes = if s.dict.get(b"Filter").is_ok() {
+        s.decompressed_content().ok()?
+    } else {
+        s.content.clone()
+    };
+    let matrix = s
+        .dict
+        .get(b"Matrix")
+        .ok()
+        .and_then(|o| pdf.resolve(o))
+        .and_then(|o| o.as_array().ok().cloned())
+        .filter(|a| a.len() == 6)
+        .map(|a| {
+            let mut m = IDENTITY;
+            for (slot, v) in m.iter_mut().zip(&a) {
+                *slot = obj_num(v);
+            }
+            m
+        })
+        .unwrap_or(IDENTITY);
+    let res = s
+        .dict
+        .get(b"Resources")
+        .ok()
+        .and_then(|o| pdf.resolve(o))
+        .and_then(|o| o.as_dict().ok().cloned());
+    Some((bytes, res, matrix))
+}
+
+fn obj_num(o: &Object) -> f32 {
+    match o {
+        Object::Integer(i) => *i as f32,
+        Object::Real(r) => *r,
+        _ => 0.0,
+    }
 }
 
 fn deref<'a>(pdf: &'a PdfDoc<'_>, o: &'a Object) -> &'a Object {
