@@ -1,0 +1,23 @@
+name: ci
+
+# Build gate: unit + snapshot + robustness tests and clippy on every push/PR.
+# (Cross-binding byte-identical output is enforced separately by parity.yml.)
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # default-members = core + cli (binding cdylibs are built by their
+      # packaging tools, not plain cargo).
+      - run: cargo test
+      - run: cargo test --features rayon
+      - run: cargo clippy --workspace --all-targets -- -D warnings
