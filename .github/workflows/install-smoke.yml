@@ -1,0 +1,91 @@
+name: install-smoke
+
+# Post-release acceptance (PER-70): install the PUBLISHED packages in clean
+# environments across OSes and parse a real PDF. Run manually after a release:
+#   Actions → install-smoke → Run workflow → version = 0.1.4
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published version to test (e.g. 0.1.4)"
+        required: true
+
+jobs:
+  pip:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - shell: bash
+        run: |
+          pip install "pdfmuse==${{ inputs.version }}"
+          python -c "import pdfmuse._native as n, json; d=json.loads(n.parse_bytes(open('tests/corpus/hello.pdf','rb').read(), None)); assert d['source']=='Pdf' and d['pages']; print('pip ok', len(d['pages']), 'page(s)')"
+
+  npm-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm i "@pdfmuse/node@${{ inputs.version }}"
+          node -e "const {parse}=require('@pdfmuse/node');const fs=require('fs');const d=parse(fs.readFileSync('tests/corpus/hello.pdf'));if(d.source!=='Pdf'||!d.pages.length)process.exit(1);console.log('npm-native ok',d.pages.length,'page(s)')"
+
+  npm-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - shell: bash
+        run: |
+          npm init -y >/dev/null
+          npm i "@pdfmuse/core@${{ inputs.version }}"
+          cat > smoke.mjs <<'EOF'
+          import init, { parse } from "@pdfmuse/core";
+          import { readFileSync } from "node:fs";
+          import { fileURLToPath } from "node:url";
+          await init(readFileSync(fileURLToPath(new URL("./node_modules/@pdfmuse/core/pdfmuse_wasm_bg.wasm", import.meta.url))));
+          const d = JSON.parse(parse(new Uint8Array(readFileSync("tests/corpus/hello.pdf"))));
+          if (d.source !== "Pdf" || !d.pages.length) process.exit(1);
+          console.log("npm-wasm ok", d.pages.length, "page(s)");
+          EOF
+          node smoke.mjs
+
+  cargo:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - shell: bash
+        run: |
+          pdf="$PWD/tests/corpus/hello.pdf"
+          cargo new smoke && cd smoke
+          cargo add "pdfmuse-core@${{ inputs.version }}"
+          cat > src/main.rs <<'EOF'
+          fn main() {
+              let data = std::fs::read(std::env::args().nth(1).unwrap()).unwrap();
+              let doc = pdfmuse_core::parse(&data, None).unwrap();
+              assert!(!doc.pages.is_empty());
+              println!("cargo ok {} page(s)", doc.pages.len());
+          }
+          EOF
+          cargo run --release -- "$pdf"
