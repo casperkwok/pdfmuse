@@ -1,6 +1,11 @@
-# pdfmuse
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/pdfmuse-logo-dark.svg">
+    <img alt="pdfmuse" src="assets/pdfmuse-logo.svg" width="340">
+  </picture>
+</p>
 
-**English** · [中文](README.zh-CN.md)
+<p align="center"><strong>English</strong> · <a href="README.zh-CN.md">中文</a></p>
 
 **Deterministic PDF/DOCX parser for RAG / LLMs** — one Rust core, with Python, Node & WASM bindings that produce **byte-identical** output.
 

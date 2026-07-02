@@ -1,6 +1,11 @@
-# pdfmuse
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/pdfmuse-logo-dark.svg">
+    <img alt="pdfmuse" src="assets/pdfmuse-logo.svg" width="340">
+  </picture>
+</p>
 
-[English](README.md) · **中文**
+<p align="center"><a href="README.md">English</a> · <strong>中文</strong></p>
 
 **面向 RAG / LLM 的确定性 PDF/DOCX 解析器** —— 单一 Rust 核心,配 Python、Node、WASM 三端绑定,输出**逐字节一致**。
 

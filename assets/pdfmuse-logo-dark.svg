@@ -1,0 +1,17 @@
+<svg width="320" height="96" viewBox="0 0 320 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="pdfmuse">
+  <defs>
+    <linearGradient id="pm-bg-d" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#818CF8"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="84" height="84" rx="22" fill="url(#pm-bg-d)"/>
+  <rect x="24" y="45" width="30" height="6" rx="3" fill="#FBBF24"/>
+  <rect x="24" y="58" width="48" height="5" rx="2.5" fill="#FFFFFF" opacity="0.95"/>
+  <rect x="24" y="68" width="48" height="5" rx="2.5" fill="#FFFFFF" opacity="0.78"/>
+  <rect x="24" y="78" width="28" height="5" rx="2.5" fill="#FFFFFF" opacity="0.62"/>
+  <path d="M68 16 C69.8 23.8 72.2 26.2 80 28 C72.2 29.8 69.8 32.2 68 40 C66.2 32.2 63.8 29.8 56 28 C63.8 26.2 66.2 23.8 68 16 Z" fill="#FBBF24"/>
+  <text x="110" y="62" font-family="ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace" font-size="42" font-weight="700" letter-spacing="-1.5">
+    <tspan fill="#E2E8F0">pdf</tspan><tspan fill="#A5B4FC">muse</tspan>
+  </text>
+</svg>
