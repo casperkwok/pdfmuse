@@ -8,6 +8,15 @@
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">中文</a></p>
 
 <p align="center">
+  <a href="https://crates.io/crates/pdfmuse-core"><img alt="crates.io" src="https://img.shields.io/crates/v/pdfmuse-core?logo=rust&logoColor=white&label=crates.io&color=E43716"></a>
+  <a href="https://pypi.org/project/pdfmuse/"><img alt="PyPI" src="https://img.shields.io/pypi/v/pdfmuse?logo=pypi&logoColor=white&label=PyPI&color=3775A9"></a>
+  <a href="https://www.npmjs.com/package/@pdfmuse/node"><img alt="npm" src="https://img.shields.io/npm/v/%40pdfmuse%2Fnode?logo=npm&label=npm&color=CB3837"></a>
+  <a href="https://github.com/casperkwok/pdfmuse/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/casperkwok/pdfmuse/ci.yml?branch=main&logo=github&label=CI"></a>
+  <a href="https://casperkwok.github.io/pdfmuse/"><img alt="live demo" src="https://img.shields.io/badge/demo-live-6E56CF?logo=webassembly&logoColor=white"></a>
+  <img alt="license" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue">
+</p>
+
+<p align="center">
   <a href="https://casperkwok.github.io/pdfmuse/"><strong>▶ Live playground</strong></a> — drag a PDF, watch it parse in your browser (nothing is uploaded)
 </p>
 
@@ -32,14 +41,26 @@ pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file a
 
 ## Performance
 
-Measured on 22 real-world PDFs (resumes, reports, invoices; median of 7 runs, core-to-core, each returning a string):
+Two things matter for a RAG pre-layer: how fast, and whether it keeps the content.
+
+**Per-document latency** — median over 200 runs, a 1-page 242 KB résumé, Apple Silicon:
+
+| engine | time / doc |
+|---|---|
+| **pdfmuse** — Rust core | **~1.3 ms** |
+| pdfmuse — `@pdfmuse/node` (native binding) | ~1.5 ms |
+| pdfmuse — `@pdfmuse/core` (WASM) | ~2.2 ms |
+| PyMuPDF — mature C library | ~6.8 ms |
+| pdfplumber — Python, common RAG choice | ~91 ms |
+
+**Across 22 real-world PDFs** (resumes, reports, invoices; median of 7 runs, core-to-core, each returning a string):
 
 | vs | result |
 |---|---|
-| **pdfplumber** (Python, common RAG choice) | **~28–39× faster** |
-| **PyMuPDF** (mature C library) | **~4× faster** (wins every file in the sample) |
+| **PyMuPDF** | **~4× faster** — wins every file in the sample |
+| **pdfplumber** | **~28–39× faster** |
 
-Text output is preserved (median 100% non-whitespace coverage vs PyMuPDF). See [`benches/`](benches) and `examples/visual_check.py`. Numbers are hardware-dependent — reproduce locally.
+Content is preserved (median **100%** non-whitespace character coverage vs PyMuPDF). Numbers are hardware-dependent — reproduce with [`benches/`](benches) (`python benches/compare.py`) and eyeball fidelity with `examples/visual_check.py`.
 
 ## Install
 
