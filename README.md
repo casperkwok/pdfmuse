@@ -99,21 +99,26 @@ let chunks = pdfmuse_core::chunk(&doc);                      // RAG chunks + {pa
 **Python**:
 ```python
 import pdfmuse
-doc = pdfmuse.parse(open("report.pdf", "rb").read())
-text = "".join(c.text for pg in doc.pages for c in pg.chars)
+data = open("report.pdf", "rb").read()
+text = pdfmuse.to_text(data)         # plain text — fast path (~1.3ms, no full-IR json.loads)
+md = pdfmuse.to_markdown(data)       # structured Markdown (headings, tables)
+doc = pdfmuse.parse(data)            # full IR: doc.pages[i].chars/blocks with bboxes
 ```
 
 **Node**:
 ```js
-const { parse_buffer } = require("@pdfmuse/node");
-const doc = JSON.parse(parse_buffer(fs.readFileSync("report.pdf")));
+const { toText, toMarkdown, parse } = require("@pdfmuse/node");
+const data = fs.readFileSync("report.pdf");
+const text = toText(data);           // plain text — fast path
+const doc = parse(data);             // full IR (typed Document)
 ```
 
 **WASM** (browser — digital PDFs; scanned pages return a `NeedsOcr` warning to hand off server-side):
 ```js
-import init, { parse } from "@pdfmuse/core";
+import init, { to_text, parse } from "@pdfmuse/core";
 await init();
-const doc = JSON.parse(parse(new Uint8Array(bytes)));
+const text = to_text(new Uint8Array(bytes));         // plain text
+const doc = JSON.parse(parse(new Uint8Array(bytes))); // full IR
 ```
 
 ## Integrations

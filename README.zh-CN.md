@@ -99,21 +99,26 @@ let chunks = pdfmuse_core::chunk(&doc);                      // RAG 分块 + {pa
 **Python**:
 ```python
 import pdfmuse
-doc = pdfmuse.parse(open("report.pdf", "rb").read())
-text = "".join(c.text for pg in doc.pages for c in pg.chars)
+data = open("report.pdf", "rb").read()
+text = pdfmuse.to_text(data)         # 纯文本——快路径(~1.3ms,免整棵 IR 的 json.loads)
+md = pdfmuse.to_markdown(data)       # 结构化 Markdown(标题、表格)
+doc = pdfmuse.parse(data)            # 完整 IR:doc.pages[i].chars/blocks 带 bbox
 ```
 
 **Node**:
 ```js
-const { parse_buffer } = require("@pdfmuse/node");
-const doc = JSON.parse(parse_buffer(fs.readFileSync("report.pdf")));
+const { toText, toMarkdown, parse } = require("@pdfmuse/node");
+const data = fs.readFileSync("report.pdf");
+const text = toText(data);           // 纯文本——快路径
+const doc = parse(data);             // 完整 IR(带类型的 Document)
 ```
 
 **WASM**（浏览器——数字版 PDF;扫描页返回 `NeedsOcr` 警告,交由服务端处理）:
 ```js
-import init, { parse } from "@pdfmuse/core";
+import init, { to_text, parse } from "@pdfmuse/core";
 await init();
-const doc = JSON.parse(parse(new Uint8Array(bytes)));
+const text = to_text(new Uint8Array(bytes));          // 纯文本
+const doc = JSON.parse(parse(new Uint8Array(bytes))); // 完整 IR
 ```
 
 ## 生态集成
