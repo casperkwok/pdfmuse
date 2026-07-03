@@ -101,8 +101,9 @@ let chunks = pdfmuse_core::chunk(&doc);                      // RAG 分块 + {pa
 import pdfmuse
 data = open("report.pdf", "rb").read()
 text = pdfmuse.to_text(data)         # 纯文本——快路径(~1.3ms,免整棵 IR 的 json.loads)
-md = pdfmuse.to_markdown(data)       # 结构化 Markdown(标题、表格)
+md = pdfmuse.to_markdown(data)       # 结构化 Markdown——标题(PDF & DOCX)+ 表格
 doc = pdfmuse.parse(data)            # 完整 IR:doc.pages[i].chars/blocks 带 bbox
+clean = pdfmuse.to_text(data, drop_boilerplate=True)  # 去掉跨页页眉/页脚
 ```
 
 **Node**:
@@ -110,6 +111,7 @@ doc = pdfmuse.parse(data)            # 完整 IR:doc.pages[i].chars/blocks 带 b
 const { toText, toMarkdown, parse } = require("@pdfmuse/node");
 const data = fs.readFileSync("report.pdf");
 const text = toText(data);           // 纯文本——快路径
+const clean = toText(data, undefined, true);  // 去掉跨页页眉/页脚
 const doc = parse(data);             // 完整 IR(带类型的 Document)
 ```
 
@@ -146,7 +148,7 @@ const doc = JSON.parse(parse(new Uint8Array(bytes))); // 完整 IR
 
 ## 能力边界
 
-**在核心内（确定性）**:文字 + 坐标/字体/字号/颜色 · 矢量线与矩形 · 行/段/分栏聚类 · 有线表格与空白对齐表格重建 · 完整 DOCX 结构 · JSON / Markdown / RAG 分块输出。
+**在核心内（确定性）**:文字 + 坐标/字体/字号/颜色 · 矢量线与矩形 · 行/段/分栏聚类 · 标题识别(字号 + 编号) · 跨页页眉页脚识别 + 可选去除 · 有线表格与空白对齐表格重建 · 完整 DOCX 结构 · JSON / Markdown / RAG 分块输出。
 
 **在核心外（可插拔 `VisionBackend`）**:扫描件 OCR · 无框表格结构识别 · 标题/正文/图注分类。无文字层（扫描/图片）的页会标 `NeedsOcr`,交给后端——见 [`docs/adr/0001-pdf-engine-strategy.md`](docs/adr/0001-pdf-engine-strategy.md)。
 

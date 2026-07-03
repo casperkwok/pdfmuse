@@ -47,11 +47,15 @@ export function parse(data: Buffer, fmt?: "pdf" | "docx"): Document {
  * only need text: the Rust core returns one string, so there is no full-IR JSON
  * to `JSON.parse` on the JS side.
  */
-export function toText(data: Buffer, fmt?: "pdf" | "docx"): string {
-  return text_buffer(data, fmt);
+export function toText(data: Buffer, fmt?: "pdf" | "docx", dropBoilerplate?: boolean): string {
+  return text_buffer(data, fmt, dropBoilerplate);
 }
 
-/** Parse and return structured Markdown (headings + tables) as one string. */
-export function toMarkdown(data: Buffer, fmt?: "pdf" | "docx"): string {
-  return markdown_buffer(data, fmt);
+/**
+ * Parse and return structured Markdown (headings + tables) as one string.
+ * `dropBoilerplate` strips running headers/footers (page numbers, repeated
+ * titles) detected across pages.
+ */
+export function toMarkdown(data: Buffer, fmt?: "pdf" | "docx", dropBoilerplate?: boolean): string {
+  return markdown_buffer(data, fmt, dropBoilerplate);
 }

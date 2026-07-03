@@ -101,8 +101,9 @@ let chunks = pdfmuse_core::chunk(&doc);                      // RAG chunks + {pa
 import pdfmuse
 data = open("report.pdf", "rb").read()
 text = pdfmuse.to_text(data)         # plain text — fast path (~1.3ms, no full-IR json.loads)
-md = pdfmuse.to_markdown(data)       # structured Markdown (headings, tables)
+md = pdfmuse.to_markdown(data)       # structured Markdown — headings (PDF & DOCX) + tables
 doc = pdfmuse.parse(data)            # full IR: doc.pages[i].chars/blocks with bboxes
+clean = pdfmuse.to_text(data, drop_boilerplate=True)  # strip running headers/footers
 ```
 
 **Node**:
@@ -110,6 +111,7 @@ doc = pdfmuse.parse(data)            # full IR: doc.pages[i].chars/blocks with b
 const { toText, toMarkdown, parse } = require("@pdfmuse/node");
 const data = fs.readFileSync("report.pdf");
 const text = toText(data);           // plain text — fast path
+const clean = toText(data, undefined, true);  // strip running headers/footers
 const doc = parse(data);             // full IR (typed Document)
 ```
 
@@ -146,7 +148,7 @@ const doc = JSON.parse(parse(new Uint8Array(bytes))); // full IR
 
 ## Scope boundary
 
-**In the core (deterministic):** text + coordinates/font/size/color · vector rules & rects · line/paragraph/column clustering · ruled & whitespace-aligned table reconstruction · full DOCX structure · JSON / Markdown / RAG-chunk output.
+**In the core (deterministic):** text + coordinates/font/size/color · vector rules & rects · line/paragraph/column clustering · heading detection (font-size + numbering) · running header/footer detection + opt-in removal · ruled & whitespace-aligned table reconstruction · full DOCX structure · JSON / Markdown / RAG-chunk output.
 
 **Out of the core (pluggable `VisionBackend`):** scanned-page OCR · borderless-table structure recognition · heading/body/caption classification. Text-less (scanned/image) pages are flagged `NeedsOcr` and left for a backend — see [`docs/adr/0001-pdf-engine-strategy.md`](docs/adr/0001-pdf-engine-strategy.md).
 

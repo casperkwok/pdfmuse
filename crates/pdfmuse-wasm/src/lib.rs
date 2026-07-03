@@ -41,17 +41,25 @@ fn wasm_format(fmt: Option<&str>) -> Result<Option<Format>, JsValue> {
 }
 
 /// Parse `data` and return plain reading-order text (one string, no full-IR JSON).
+/// `drop_boilerplate` strips running headers/footers first.
 #[wasm_bindgen]
-pub fn to_text(data: &[u8], fmt: Option<String>) -> Result<String, JsValue> {
+pub fn to_text(data: &[u8], fmt: Option<String>, drop_boilerplate: Option<bool>) -> Result<String, JsValue> {
     let format = wasm_format(fmt.as_deref())?;
-    let doc = pdfmuse_core::parse(data, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let mut doc = pdfmuse_core::parse(data, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    if drop_boilerplate.unwrap_or(false) {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_text(&doc))
 }
 
 /// Parse `data` and return structured Markdown (headings + tables) as one string.
+/// `drop_boilerplate` strips running headers/footers first.
 #[wasm_bindgen]
-pub fn to_markdown(data: &[u8], fmt: Option<String>) -> Result<String, JsValue> {
+pub fn to_markdown(data: &[u8], fmt: Option<String>, drop_boilerplate: Option<bool>) -> Result<String, JsValue> {
     let format = wasm_format(fmt.as_deref())?;
-    let doc = pdfmuse_core::parse(data, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let mut doc = pdfmuse_core::parse(data, format).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    if drop_boilerplate.unwrap_or(false) {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_markdown(&doc))
 }

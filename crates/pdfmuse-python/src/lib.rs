@@ -45,26 +45,33 @@ fn parse_format(fmt: Option<&str>) -> PyResult<Option<Format>> {
 /// Parse `data` and return plain reading-order text. Avoids materializing the full
 /// IR on the Python side (no `json.loads`), so the text path keeps the Rust speed.
 #[pyfunction]
-#[pyo3(signature = (data, fmt=None))]
-fn text_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<String> {
+#[pyo3(signature = (data, fmt=None, drop_boilerplate=false))]
+fn text_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>, drop_boilerplate: bool) -> PyResult<String> {
     let format = parse_format(fmt.as_deref())?;
     let owned = data.to_vec();
-    let doc = py
+    let mut doc = py
         .allow_threads(move || pdfmuse_core::parse(&owned, format))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    if drop_boilerplate {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_text(&doc))
 }
 
 /// Parse `data` and return structured Markdown (headings + tables) — a single Rust
 /// call returning one string, no per-object materialization on the Python side.
+/// `drop_boilerplate` strips running headers/footers first.
 #[pyfunction]
-#[pyo3(signature = (data, fmt=None))]
-fn markdown_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>) -> PyResult<String> {
+#[pyo3(signature = (data, fmt=None, drop_boilerplate=false))]
+fn markdown_bytes(py: Python<'_>, data: &[u8], fmt: Option<String>, drop_boilerplate: bool) -> PyResult<String> {
     let format = parse_format(fmt.as_deref())?;
     let owned = data.to_vec();
-    let doc = py
+    let mut doc = py
         .allow_threads(move || pdfmuse_core::parse(&owned, format))
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    if drop_boilerplate {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_markdown(&doc))
 }
 

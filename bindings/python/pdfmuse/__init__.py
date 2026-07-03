@@ -57,17 +57,22 @@ def parse(data: bytes, fmt: Optional[str] = None) -> Document:
     )
 
 
-def to_text(data: bytes, fmt: Optional[str] = None) -> str:
+def to_text(data: bytes, fmt: Optional[str] = None, drop_boilerplate: bool = False) -> str:
     """Parse and return plain reading-order text.
 
     Faster than ``parse`` when you only need text: the Rust core returns one
     string, so nothing is deserialized on the Python side (no ``json.loads`` of
     the full IR). ``fmt`` forces ``"pdf"``/``"docx"``; ``None`` auto-detects.
+    ``drop_boilerplate=True`` strips running headers/footers (page numbers,
+    repeated titles) detected across pages.
     """
-    return _native.text_bytes(bytes(data), fmt)
+    return _native.text_bytes(bytes(data), fmt, drop_boilerplate)
 
 
-def to_markdown(data: bytes, fmt: Optional[str] = None) -> str:
+def to_markdown(data: bytes, fmt: Optional[str] = None, drop_boilerplate: bool = False) -> str:
     """Parse and return structured Markdown (headings + tables), returned as one
-    string from the Rust core — same speed benefit as :func:`to_text`."""
-    return _native.markdown_bytes(bytes(data), fmt)
+    string from the Rust core — same speed benefit as :func:`to_text`.
+
+    ``drop_boilerplate=True`` strips running headers/footers first.
+    """
+    return _native.markdown_bytes(bytes(data), fmt, drop_boilerplate)

@@ -44,17 +44,25 @@ fn to_format(fmt: Option<&str>) -> napi::Result<Option<Format>> {
 
 /// Parse `data` and return plain reading-order text. One Rust call returning a
 /// string — no full-IR JSON to parse on the JS side, so the text path stays fast.
+/// `dropBoilerplate` strips running headers/footers first.
 #[napi(js_name = "text_buffer")]
-pub fn text_buffer(data: Buffer, fmt: Option<String>) -> napi::Result<String> {
+pub fn text_buffer(data: Buffer, fmt: Option<String>, drop_boilerplate: Option<bool>) -> napi::Result<String> {
     let format = to_format(fmt.as_deref())?;
-    let doc = pdfmuse_core::parse(&data, format).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let mut doc = pdfmuse_core::parse(&data, format).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    if drop_boilerplate.unwrap_or(false) {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_text(&doc))
 }
 
 /// Parse `data` and return structured Markdown (headings + tables) as one string.
+/// `dropBoilerplate` strips running headers/footers first.
 #[napi(js_name = "markdown_buffer")]
-pub fn markdown_buffer(data: Buffer, fmt: Option<String>) -> napi::Result<String> {
+pub fn markdown_buffer(data: Buffer, fmt: Option<String>, drop_boilerplate: Option<bool>) -> napi::Result<String> {
     let format = to_format(fmt.as_deref())?;
-    let doc = pdfmuse_core::parse(&data, format).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    let mut doc = pdfmuse_core::parse(&data, format).map_err(|e| napi::Error::from_reason(e.to_string()))?;
+    if drop_boilerplate.unwrap_or(false) {
+        pdfmuse_core::remove_boilerplate(&mut doc);
+    }
     Ok(pdfmuse_core::to_markdown(&doc))
 }
