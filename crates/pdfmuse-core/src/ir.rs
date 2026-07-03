@@ -123,6 +123,19 @@ pub struct Paragraph {
     pub bbox: BBox,
     pub text: String,
     pub heading_level: Option<u8>,
+    /// A non-body role, when detected. Skipped in JSON when `None`, so ordinary
+    /// paragraphs serialize exactly as before.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<BlockRole>,
+}
+
+/// A non-body role a paragraph can play. Used by boilerplate removal (PER-168).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BlockRole {
+    /// A running header/footer (page number, document title, "CONFIDENTIAL")
+    /// repeated across pages. Marked, never dropped by default — see
+    /// [`remove_boilerplate`](crate::remove_boilerplate).
+    HeaderFooter,
 }
 
 /// A reconstructed table. `source` records which deterministic path built it.

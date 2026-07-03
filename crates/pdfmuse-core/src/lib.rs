@@ -52,10 +52,27 @@ pub fn parse_with_password(
             // Heading detection (font-size clustering + numbering) — DOCX gets its
             // heading levels from Word styles instead.
             layout::assign_headings(&mut doc);
+            // Mark (never drop) running headers/footers; callers opt in via
+            // `remove_boilerplate`.
+            layout::mark_boilerplate(&mut doc);
             Ok(doc)
         }
         Some(Format::Docx) => docx::parse(data),
         None => Err(PdfmuseError::InvalidFormat),
+    }
+}
+
+/// Strip running headers/footers (paragraphs marked
+/// [`ir::BlockRole::HeaderFooter`]) from `doc`, in place.
+///
+/// Opt-in: [`parse`] only *marks* boilerplate, so default output is unchanged.
+/// Call this before [`to_text`] / [`to_markdown`] / [`chunk`] to drop repeated page
+/// furniture (page numbers, running titles) from your RAG text. No-op on documents
+/// where nothing was marked (single/short docs, or no repetition).
+pub fn remove_boilerplate(doc: &mut ir::Document) {
+    for page in &mut doc.pages {
+        page.blocks
+            .retain(|b| !matches!(b, ir::Block::Paragraph(p) if p.role == Some(ir::BlockRole::HeaderFooter)));
     }
 }
 

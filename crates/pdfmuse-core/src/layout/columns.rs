@@ -150,7 +150,7 @@ mod tests {
         Block::Paragraph(Paragraph {
             bbox: BBox { x0, y0, x1, y1: y0 + 10.0 },
             text: label.into(),
-            heading_level: None,
+            heading_level: None, role: None,
         })
     }
 

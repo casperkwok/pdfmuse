@@ -6,12 +6,14 @@
 //! lines (PER-40), paragraphs (PER-41), columns/reading-order (PER-42),
 //! tables (PER-43).
 
+mod boilerplate;
 mod columns;
 mod headings;
 mod lines;
 mod paragraphs;
 mod tables;
 
+pub(crate) use boilerplate::mark as mark_boilerplate;
 pub(crate) use headings::assign_headings;
 
 use crate::ir::{Block, Page, TextLine};

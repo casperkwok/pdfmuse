@@ -189,7 +189,7 @@ mod tests {
     }
 
     fn para(text: &str, bbox: BBox) -> Block {
-        Block::Paragraph(Paragraph { bbox, text: text.into(), heading_level: None })
+        Block::Paragraph(Paragraph { bbox, text: text.into(), heading_level: None, role: None })
     }
 
     fn level_of(b: &Block) -> Option<u8> {

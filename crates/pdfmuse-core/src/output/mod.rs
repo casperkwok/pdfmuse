@@ -40,12 +40,12 @@ mod tests {
                     Block::Paragraph(Paragraph {
                         bbox: bbox(),
                         text: "Title".into(),
-                        heading_level: Some(1),
+                        heading_level: Some(1), role: None,
                     }),
                     Block::Paragraph(Paragraph {
                         bbox: bbox(),
                         text: "Hello world".into(),
-                        heading_level: None,
+                        heading_level: None, role: None,
                     }),
                     Block::Table(Table {
                         bbox: bbox(),
