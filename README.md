@@ -137,6 +137,13 @@ const doc = JSON.parse(parse(new Uint8Array(bytes))); // full IR
   docs = PdfmuseReader(mode="elements").load_data("report.pdf")
   ```
 
+- **Haystack** — [`pdfmuse-haystack`](integrations/haystack-pdfmuse): a `PdfmuseConverter` component (`text` / `markdown`) for Haystack 2.x pipelines.
+
+  ```python
+  from pdfmuse_haystack import PdfmuseConverter
+  docs = PdfmuseConverter(mode="markdown").run(sources=["report.pdf"])["documents"]
+  ```
+
 ## Scope boundary
 
 **In the core (deterministic):** text + coordinates/font/size/color · vector rules & rects · line/paragraph/column clustering · ruled & whitespace-aligned table reconstruction · full DOCX structure · JSON / Markdown / RAG-chunk output.

@@ -137,6 +137,13 @@ const doc = JSON.parse(parse(new Uint8Array(bytes))); // 完整 IR
   docs = PdfmuseReader(mode="elements").load_data("report.pdf")
   ```
 
+- **Haystack** —— [`pdfmuse-haystack`](integrations/haystack-pdfmuse):`PdfmuseConverter` 组件(`text` / `markdown`),用于 Haystack 2.x pipeline。
+
+  ```python
+  from pdfmuse_haystack import PdfmuseConverter
+  docs = PdfmuseConverter(mode="markdown").run(sources=["report.pdf"])["documents"]
+  ```
+
 ## 能力边界
 
 **在核心内（确定性）**:文字 + 坐标/字体/字号/颜色 · 矢量线与矩形 · 行/段/分栏聚类 · 有线表格与空白对齐表格重建 · 完整 DOCX 结构 · JSON / Markdown / RAG 分块输出。

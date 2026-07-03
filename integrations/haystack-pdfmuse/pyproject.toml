@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pdfmuse-haystack"
+version = "0.1.0"
+description = "Haystack converter for pdfmuse — deterministic PDF/DOCX parsing for RAG."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Casper Kwok" }]
+keywords = ["haystack", "pdf", "docx", "rag", "llm", "parser", "pdfmuse", "converter"]
+dependencies = [
+    "pdfmuse>=0.1.6",
+    "haystack-ai>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/casperkwok/pdfmuse"
+Repository = "https://github.com/casperkwok/pdfmuse"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pdfmuse_haystack"]
