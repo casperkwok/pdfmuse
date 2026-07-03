@@ -10,6 +10,13 @@ license = "MIT OR Apache-2.0"
 dynamic = ["version"]
 readme = "README.md"
 keywords = ["pdf", "docx", "parser", "rag", "llm"]
+classifiers = [
+  "Topic :: Text Processing",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Programming Language :: Rust",
+  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: Apache Software License",
+]
 
 [tool.maturin]
 manifest-path = "crates/pdfmuse-python/Cargo.toml"

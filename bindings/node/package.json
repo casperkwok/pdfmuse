@@ -1,7 +1,7 @@
 {
   "name": "@pdfmuse/node",
   "version": "0.1.6",
-  "description": "Deterministic PDF/DOCX parser for RAG / LLMs — native Node.js binding.",
+  "description": "Deterministic PDF/DOCX parser for RAG / LLMs \u2014 native Node.js binding.",
   "license": "MIT OR Apache-2.0",
   "repository": "https://github.com/casperkwok/pdfmuse",
   "main": "index.js",
@@ -37,5 +37,16 @@
   "scripts": {
     "build:native": "napi build --platform --release --cargo-cwd ../../crates/pdfmuse-node --js native.js --dts native.d.ts",
     "build": "npm run build:native && tsc"
-  }
+  },
+  "keywords": [
+    "pdf",
+    "docx",
+    "parser",
+    "rag",
+    "llm",
+    "text-extraction",
+    "ocr",
+    "pymupdf",
+    "document"
+  ]
 }
