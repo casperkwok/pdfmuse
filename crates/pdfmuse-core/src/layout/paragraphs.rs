@@ -72,7 +72,7 @@ fn make_paragraph(lines: &[TextLine]) -> Block {
             },
         });
     }
-    Block::Paragraph(Paragraph { bbox: bbox.unwrap_or_default(), text, heading_level: None })
+    Block::Paragraph(Paragraph { bbox: bbox.unwrap_or_default(), text, heading_level: None, role: None })
 }
 
 #[cfg(test)]

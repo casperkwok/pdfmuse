@@ -79,7 +79,7 @@ fn read_paragraph<R: BufRead>(
         buf.clear();
     }
     let heading_level = style_id.as_deref().and_then(|id| styles::heading_level(styles, id));
-    Ok(Paragraph { bbox: BBox::default(), text, heading_level })
+    Ok(Paragraph { bbox: BBox::default(), text, heading_level, role: None })
 }
 
 /// A cell as read from XML, before vertical-merge resolution. `grid_col` is the
