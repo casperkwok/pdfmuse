@@ -7,9 +7,12 @@
 //! tables (PER-43).
 
 mod columns;
+mod headings;
 mod lines;
 mod paragraphs;
 mod tables;
+
+pub(crate) use headings::assign_headings;
 
 use crate::ir::{Block, Page, TextLine};
 
@@ -52,7 +55,7 @@ pub(crate) fn layout_page(page: &mut Page) {
         let para_lines: Vec<TextLine> =
             lines.iter().enumerate().filter(|(i, _)| !used.contains(i)).map(|(_, l)| l.clone()).collect();
 
-        let mut blocks = paragraphs::group_paragraphs(&para_lines);
+        let mut blocks = paragraphs::group_paragraphs(&para_lines, &page.chars);
         blocks.extend(ws_tables.into_iter().map(Block::Table));
         blocks.sort_by(|a, b| columns::block_top(a).total_cmp(&columns::block_top(b)));
         col_blocks.extend(blocks);
