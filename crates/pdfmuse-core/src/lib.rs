@@ -49,6 +49,9 @@ pub fn parse_with_password(
             let mut doc = pdf::parse_pdf(data, password)?;
             // Geometric layout: chars → lines → paragraphs (reading order).
             layout_pages(&mut doc);
+            // Heading detection (font-size clustering + numbering) — DOCX gets its
+            // heading levels from Word styles instead.
+            layout::assign_headings(&mut doc);
             Ok(doc)
         }
         Some(Format::Docx) => docx::parse(data),
