@@ -11,6 +11,7 @@ pub mod ir;
 mod layout;
 mod output;
 mod pdf;
+mod profile;
 
 pub use error::{PdfmuseError, Result};
 pub use output::{chunk, to_json, to_markdown, to_text, Chunk};
@@ -47,14 +48,20 @@ pub fn parse_with_password(
     match fmt.or_else(|| detect_format(data)) {
         Some(Format::Pdf) => {
             let mut doc = pdf::parse_pdf(data, password)?;
+            let prof = profile::enabled();
             // Geometric layout: chars → lines → paragraphs (reading order).
+            let tl = profile::start(prof);
             layout_pages(&mut doc);
+            profile::log(&tl, "layout(lines+paragraphs+columns+tables)");
             // Heading detection (font-size clustering + numbering) — DOCX gets its
             // heading levels from Word styles instead.
+            let th = profile::start(prof);
             layout::assign_headings(&mut doc);
             // Mark (never drop) running headers/footers; callers opt in via
             // `remove_boilerplate`.
             layout::mark_boilerplate(&mut doc);
+            profile::log(&th, "headings+boilerplate");
+            profile::dump(prof); // layout substage breakdown
             Ok(doc)
         }
         Some(Format::Docx) => docx::parse(data),

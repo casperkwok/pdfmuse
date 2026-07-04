@@ -26,9 +26,13 @@ use objects::PdfDoc;
 /// (with the `rayon` feature; sequential otherwise, e.g. WASM), then reassembled
 /// in page order so output is identical either way.
 pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document> {
+    let prof = crate::profile::enabled();
+    let t = crate::profile::start(prof);
     // Loading handles decryption (encrypted + wrong/no password → fatal Err).
     let (pdf, warnings) = PdfDoc::load(data, password)?;
+    crate::profile::log(&t, "pdf:load(xref+objects+decrypt)");
 
+    let te = crate::profile::start(prof);
     let pages: Vec<(u32, ObjectId)> = pdf.pages().into_iter().collect();
     let mut out = Document {
         source: SourceKind::Pdf,
@@ -41,6 +45,7 @@ pub(crate) fn parse_pdf(data: &[u8], password: Option<&str>) -> Result<Document>
         out.warnings.append(&mut page_warnings);
         out.pages.push(page);
     }
+    crate::profile::log(&te, "pdf:extract(decode+tokenize+interp)");
 
     Ok(out)
 }

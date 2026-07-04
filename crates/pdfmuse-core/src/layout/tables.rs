@@ -15,6 +15,12 @@ use crate::ir::{BBox, Cell, Char, Rect, Rule, Table, TableSource, TextLine};
 const EPS: f32 = 2.0;
 /// Space is inserted between chars in a cell when the gap exceeds this × size.
 const SPACE_GAP: f32 = 0.25;
+/// Beyond this many border segments a "grid" is a dense figure, not a table — real
+/// tables have segments ~proportional to their lines/cells. Guards ruled-table
+/// detection against O(cells × segs) blowup on figure-heavy pages (PER-228).
+const MAX_TABLE_SEGS: usize = 20_000;
+/// Likewise, an implausibly large cell grid (rows × cols) is a figure, not a table.
+const MAX_TABLE_CELLS: usize = 8_000;
 
 /// An axis-aligned line segment: `pos` is the constant coordinate, `lo..hi` the
 /// span along the other axis.
@@ -28,10 +34,22 @@ struct Seg {
 /// multiple disjoint tables per page is future work.
 pub(super) fn detect_ruled(chars: &[Char], rects: &[Rect], rules: &[Rule]) -> Vec<Table> {
     let (hsegs, vsegs) = collect(rects, rules);
+    // A real ruled table has border segments roughly proportional to its rows+cols
+    // (one per grid line, a few per cell if drawn as rects). A page whose "grid" is
+    // backed by tens of thousands of segments is a dense figure/plot, not a table —
+    // treating it as one is both wrong *and* O(cells × segs) catastrophic (a single
+    // arXiv figure hit ~360k segments → billions of ops → 14 s). Bail early. (PER-228)
+    if hsegs.len() + vsegs.len() > MAX_TABLE_SEGS {
+        return Vec::new();
+    }
     let ys = cluster_positions(&hsegs);
     let xs = cluster_positions(&vsegs);
     // Need a real grid: ≥2 lines each way and at least one interior divider.
     if xs.len() < 2 || ys.len() < 2 || (xs.len() < 3 && ys.len() < 3) {
+        return Vec::new();
+    }
+    // Even within the seg budget, an implausibly large grid is a figure, not a table.
+    if xs.len().saturating_mul(ys.len()) > MAX_TABLE_CELLS {
         return Vec::new();
     }
     vec![build_table(chars, &xs, &ys, &hsegs, &vsegs)]
@@ -375,6 +393,19 @@ mod tests {
         // A lone rectangle (just an outer box) is not a table.
         let rects = vec![Rect { bbox: BBox { x0: 0.0, y0: 0.0, x1: 100.0, y1: 40.0 } }];
         assert!(detect_ruled(&[], &rects, &[]).is_empty());
+    }
+
+    #[test]
+    fn dense_figure_is_not_a_table() {
+        // A plot/figure emits a flood of short vector segments. It must NOT be read
+        // as a giant ruled table (wrong output) — and bailing keeps it O(1), not the
+        // O(cells × segs) blowup that made one arXiv figure take 14 s (PER-228).
+        let mut rules = Vec::new();
+        for i in 0..(MAX_TABLE_SEGS + 100) {
+            let x = (i % 500) as f32;
+            rules.push(vrule(x, 0.0, 400.0));
+        }
+        assert!(detect_ruled(&[], &[], &rules).is_empty(), "a dense figure must not become a table");
     }
 
     /// Append `word`'s chars (size 10, 6pt wide, contiguous) starting at `x0`.

@@ -25,7 +25,9 @@ use crate::ir::{Block, Page, TextLine};
 /// columns onto shared baselines. Blocks come out in reading order: each column
 /// top-to-bottom, columns left-to-right.
 pub(crate) fn layout_page(page: &mut Page) {
+    let p = crate::profile::enabled();
     // Ruled tables first — their chars are consumed by the table, not the text flow.
+    let t = crate::profile::start(p);
     let ruled = tables::detect_ruled(&page.chars, &page.rects, &page.rules);
     let ruled_mask: Vec<bool> = page
         .chars
@@ -36,8 +38,11 @@ pub(crate) fn layout_page(page: &mut Page) {
             ruled.iter().any(|t| cx >= t.bbox.x0 && cx <= t.bbox.x1 && cy >= t.bbox.y0 && cy <= t.bbox.y1)
         })
         .collect();
+    crate::profile::accum(p, "detect_ruled+mask", &t);
 
+    let t = crate::profile::start(p);
     let splits = columns::detect_columns(&page.chars, &ruled_mask);
+    crate::profile::accum(p, "detect_columns", &t);
     let ncols = splits.len() + 1;
 
     let mut all_lines: Vec<TextLine> = Vec::new();
@@ -51,13 +56,19 @@ pub(crate) fn layout_page(page: &mut Page) {
             .map(|(i, c)| ruled_mask[i] || columns::column_index((c.bbox.x0 + c.bbox.x1) / 2.0, &splits) != col)
             .collect();
 
+        let t = crate::profile::start(p);
         let lines = lines::cluster_lines(&page.chars, &band_mask);
+        crate::profile::accum(p, "cluster_lines", &t);
         // Whitespace-aligned tables among this column's lines.
+        let t = crate::profile::start(p);
         let (ws_tables, used) = tables::detect_whitespace(&page.chars, &lines);
+        crate::profile::accum(p, "detect_whitespace", &t);
         let para_lines: Vec<TextLine> =
             lines.iter().enumerate().filter(|(i, _)| !used.contains(i)).map(|(_, l)| l.clone()).collect();
 
+        let t = crate::profile::start(p);
         let mut blocks = paragraphs::group_paragraphs(&para_lines, &page.chars);
+        crate::profile::accum(p, "group_paragraphs", &t);
         blocks.extend(ws_tables.into_iter().map(Block::Table));
         blocks.sort_by(|a, b| columns::block_top(a).total_cmp(&columns::block_top(b)));
         col_blocks.extend(blocks);
@@ -69,7 +80,9 @@ pub(crate) fn layout_page(page: &mut Page) {
     blocks.extend(ruled.into_iter().map(Block::Table));
     // Single column: order everything (including any full-width ruled table) by y.
     if ncols == 1 {
+        let t = crate::profile::start(p);
         blocks = columns::reading_order(blocks, page.width);
+        crate::profile::accum(p, "reading_order", &t);
     }
     page.blocks = blocks;
 }
