@@ -8,9 +8,9 @@
 
 use crate::ir::{BBox, Block, Char};
 
-/// A gutter must be at least this wide (× font size, floored to an absolute) to
-/// count as a column separator rather than a word/indent gap.
-const GUTTER_SIZE: f32 = 2.0;
+/// A gutter must be at least this wide (× median font size, floored to an absolute).
+/// 1.4× (not 2×) so tight academic two-column gutters (~14pt) are still found (PER-163).
+const GUTTER_SIZE: f32 = 1.4;
 const GUTTER_MIN_PT: f32 = 12.0;
 
 /// Detect vertical column gutters from char positions, returning the x-positions
