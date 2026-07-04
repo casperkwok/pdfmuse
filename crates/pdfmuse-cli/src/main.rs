@@ -6,7 +6,7 @@
 //! and dumps the resulting [`pdfmuse_core::ir::Document`] as either pretty JSON
 //! or a plain-text Markdown stand-in.
 //!
-//! Usage: `pdfmuse parse <FILE> [--format json|md] [--debug]`
+//! Usage: `pdfmuse --version` or `pdfmuse parse <FILE> [--format json|md] [--debug]`
 //!
 //! `--format` selects the *output* representation (input format is detected by
 //! the core). `--debug` writes per-page diagnostics to stderr. Any failure —
@@ -35,6 +35,12 @@ struct Args {
     debug: bool,
 }
 
+/// Top-level command chosen from argv.
+enum Command {
+    Version,
+    Parse(Args),
+}
+
 fn main() -> ExitCode {
     // Skip argv[0] (the binary path); everything after is user input.
     match run(std::env::args().skip(1)) {
@@ -49,7 +55,13 @@ fn main() -> ExitCode {
 /// Drive the whole flow, funnelling every failure into a single `Err(String)`
 /// so `main` can render it uniformly and exit non-zero.
 fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
-    let args = parse_args(args)?;
+    let args = match parse_args(args)? {
+        Command::Version => {
+            println!("pdfmuse {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        Command::Parse(args) => args,
+    };
 
     let bytes = std::fs::read(&args.file)
         .map_err(|e| format!("cannot read '{}': {e}", args.file))?;
@@ -73,10 +85,16 @@ fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
 }
 
 /// Parse the `parse <FILE> [--format json|md] [--debug]` invocation by hand.
-fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, String> {
+fn parse_args(args: impl Iterator<Item = String>) -> Result<Command, String> {
     let mut args = args;
 
     match args.next().as_deref() {
+        Some("--version") | Some("-V") => {
+            if let Some(arg) = args.next() {
+                return Err(format!("unexpected argument '{arg}'\n{USAGE}"));
+            }
+            return Ok(Command::Version);
+        }
         Some("parse") => {}
         Some(other) => return Err(format!("unknown command '{other}'\n{USAGE}")),
         None => return Err(format!("missing command\n{USAGE}")),
@@ -111,7 +129,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, String> {
     }
 
     let file = file.ok_or_else(|| format!("missing <FILE>\n{USAGE}"))?;
-    Ok(Args { file, format, debug })
+    Ok(Command::Parse(Args { file, format, debug }))
 }
 
 /// Reconstruct a page's text by concatenating chars in order, joining pages with
@@ -158,4 +176,28 @@ fn print_debug(doc: &Document) {
 }
 
 /// One-line usage banner reused across argument errors.
-const USAGE: &str = "usage: pdfmuse parse <FILE> [--format json|md] [--debug]";
+const USAGE: &str = "usage: pdfmuse --version | pdfmuse parse <FILE> [--format json|md] [--debug]";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> impl Iterator<Item = String> + '_ {
+        values.iter().map(|value| value.to_string())
+    }
+
+    #[test]
+    fn parses_version_flag() {
+        assert!(matches!(parse_args(args(&["--version"])), Ok(Command::Version)));
+    }
+
+    #[test]
+    fn rejects_version_flag_with_extra_args() {
+        let err = match parse_args(args(&["--version", "parse"])) {
+            Ok(_) => panic!("expected --version with extra args to fail"),
+            Err(err) => err,
+        };
+
+        assert!(err.contains("unexpected argument 'parse'"));
+    }
+}
