@@ -41,28 +41,26 @@ pdfmuse is a **precision pre-layer for AI/RAG**: it extracts everything a file a
 
 ## Performance
 
-Two things matter for a RAG pre-layer: how fast, and whether it keeps the content.
+Two things matter for a RAG pre-layer: speed, and whether it keeps the content. Both
+are measured on a **public, reproducible corpus** — 61 arXiv papers across 8 fields
+(large, dense PDFs — a deliberately hard case), so you can rerun the exact benchmark:
 
-**Per-document latency** — median over 200 runs, a 1-page 242 KB résumé, Apple Silicon:
+```bash
+python benches/fetch_corpus.py --out /tmp/corpus      # the same PDFs, from a fixed manifest
+pip install "pdfmuse==0.1.8" "pymupdf==1.28.0" "pdfplumber==0.11.10"
+python benches/compare.py --dir /tmp/corpus
+```
 
-| engine | time / doc |
-|---|---|
-| **pdfmuse** — Rust core | **~1.3 ms** |
-| pdfmuse — `@pdfmuse/node` (native binding) | ~1.5 ms |
-| pdfmuse — `@pdfmuse/core` (WASM) | ~2.2 ms |
-| PyMuPDF — mature C library | ~6.8 ms |
-| pdfplumber — Python, common RAG choice | ~91 ms |
+**Text extraction** (`to_text`, median of 7 runs after warm-up; PyMuPDF 1.28 / MuPDF 1.29, pdfplumber 0.11, macOS arm64):
 
-For the text path use **`to_text()` / `to_markdown()`** — they return a string straight from the Rust core, so Python and Node keep that ~1.3 ms speed (~4× PyMuPDF). `parse()` returns the full IR (chars + coordinates), which adds host-side deserialization if you consume it as objects.
+| vs | speedup (geomean) | win rate | worst case |
+|---|---|---|---|
+| **PyMuPDF** | **~5.9× faster** | 56 / 61 (92%) | ~3× *slower* (one 3 MB paper) |
+| **pdfplumber** | **~110× faster** | 61 / 61 (100%) | 10.6× |
 
-**Across 22 real-world PDFs** (resumes, reports, invoices; median of 7 runs, core-to-core, each returning a string):
+**Honest caveat:** pdfmuse is *not* universally fastest. On the 5 largest/densest papers (2–22 MB), PyMuPDF's mature C core (MuPDF) wins — up to ~3×. pdfmuse wins the other 92%; on typical RAG docs (resumes, reports, invoices — 1–2 pages) it runs in ~1–2 ms and wins consistently. **Content is preserved:** median **100%** of PyMuPDF's non-whitespace characters (n=61).
 
-| vs | result |
-|---|---|
-| **PyMuPDF** | **~4× faster** — wins every file in the sample |
-| **pdfplumber** | **~28–39× faster** |
-
-Content is preserved (median **100%** non-whitespace character coverage vs PyMuPDF). Numbers are hardware-dependent — reproduce with [`benches/`](benches) (`python benches/compare.py`) and eyeball fidelity with `examples/visual_check.py`.
+`to_text()` / `to_markdown()` return a string straight from the Rust core (no full-IR deserialization). The full `parse()` — chars + bboxes + tables, far more than text — costs only ~2.3× the `to_text` time, still under PyMuPDF on most files. The native Node binding is ~as fast as the Rust core; WASM ~1.7×. Eyeball fidelity with `examples/visual_check.py`.
 
 ## Install
 
