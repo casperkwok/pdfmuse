@@ -47,20 +47,22 @@ are measured on a **public, reproducible corpus** — 61 arXiv papers across 8 f
 
 ```bash
 python benches/fetch_corpus.py --out /tmp/corpus      # the same PDFs, from a fixed manifest
-pip install "pdfmuse==0.1.8" "pymupdf==1.28.0" "pdfplumber==0.11.10"
+pip install "pdfmuse==0.1.10" "pymupdf==1.28.0" "pdfplumber==0.11.10"
 python benches/compare.py --dir /tmp/corpus
 ```
 
-**Text extraction** (`to_text`, median of 7 runs after warm-up; PyMuPDF 1.28 / MuPDF 1.29, pdfplumber 0.11, macOS arm64):
+**Text extraction** (`to_text`, median of 7 runs after warm-up; PyMuPDF 1.28 / MuPDF 1.29, pdfplumber 0.11, macOS arm64, 65 papers):
 
 | vs | speedup (geomean) | win rate | worst case |
 |---|---|---|---|
-| **PyMuPDF** | **~5.9× faster** | 56 / 61 (92%) | ~3× *slower* (one 3 MB paper) |
-| **pdfplumber** | **~110× faster** | 61 / 61 (100%) | 10.6× |
+| **PyMuPDF** | **~7.7× faster** | 65 / 65 (100%) | still 2.5× faster |
+| **pdfplumber** | **~150× faster** | 65 / 65 (100%) | 69× |
 
-**Honest caveat:** pdfmuse is *not* universally fastest. On the 5 largest/densest papers (2–22 MB), PyMuPDF's mature C core (MuPDF) wins — up to ~3×. pdfmuse wins the other 92%; on typical RAG docs (resumes, reports, invoices — 1–2 pages) it runs in ~1–2 ms and wins consistently. **Content is preserved:** median **100%** of PyMuPDF's non-whitespace characters (n=61).
+pdfmuse is faster on **every** file in this corpus — including a 22 MB paper (9× faster) and a plot-heavy one that draws 18k marker glyphs. **Content is preserved:** median **100%** of PyMuPDF's non-whitespace characters (n=65).
 
-`to_text()` / `to_markdown()` return a string straight from the Rust core (no full-IR deserialization). The full `parse()` — chars + bboxes + tables, far more than text — costs only ~2.3× the `to_text` time, still under PyMuPDF on most files. The native Node binding is ~as fast as the Rust core; WASM ~1.7×. Eyeball fidelity with `examples/visual_check.py`.
+`to_text()` / `to_markdown()` return a string straight from the Rust core (no full-IR deserialization). The full `parse()` — chars + bboxes + tables, far more than text — costs only ~2.3× the `to_text` time, still under PyMuPDF on most files. The native Node binding is ~as fast as the Rust core; WASM ~1.7×.
+
+**Honest limit — reading order:** extraction is *complete* (100% of chars) and *deterministic*, but flattening a 2-D page to 1-D text is where the hard cases live. Single-column, tables, and clean two-column read correctly; **dense two-column academic PDFs with very tight gutters can still interleave the columns** (a known geometric edge — see [`docs/`](docs) / issue tracker). Eyeball any file with `examples/visual_check.py`.
 
 ## Install
 

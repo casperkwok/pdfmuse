@@ -17,7 +17,7 @@ geometric-mean speedup, **win rate**, and the worst case (honest about losses).
 Reproduce the arXiv corpus these numbers ship for:
 
     python benches/fetch_corpus.py --out /tmp/corpus      # downloads from manifest
-    pip install "pdfmuse==0.1.8" "pymupdf==1.28.0" "pdfplumber==0.11.10"
+    pip install "pdfmuse==0.1.10" "pymupdf==1.28.0" "pdfplumber==0.11.10"
     python benches/compare.py --dir /tmp/corpus
 
 Or point --dir at your own PDFs. pdfplumber is ~20-40x slower, so it defaults to
