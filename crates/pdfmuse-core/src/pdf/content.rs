@@ -13,7 +13,8 @@
 //! as a `MissingCMap` warning. Straight path segments and rectangles are
 //! collected; Bézier curves advance the point but are not emitted.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 use lopdf::{Dictionary, Object, ObjectId};
 use unicode_normalization::UnicodeNormalization;
@@ -64,6 +65,21 @@ pub(crate) struct PageContent {
     pub warnings: Vec<Warning>,
 }
 
+/// A resolved form XObject: its decoded stream, fonts, resources and matrix. Cached
+/// by `ObjectId` so a form invoked many times (e.g. a plot marker drawn thousands of
+/// times) is decoded and has its fonts/CMaps built **once**, not per `Do`. Only the
+/// (cheap) interpretation re-runs, with the caller's CTM. See PER-228.
+struct CachedForm {
+    bytes: Vec<u8>,
+    fonts: BTreeMap<Vec<u8>, Font>,
+    resources: Dictionary,
+    matrix: [f32; 6],
+}
+
+/// Per-page cache of resolved form XObjects. `None` marks an id that resolved to a
+/// non-form (image) XObject, so it isn't retried on every invocation either.
+type FormCache = HashMap<ObjectId, Option<Rc<CachedForm>>>;
+
 /// Interpret a page's content stream.
 ///
 /// `page_height` (PDF points) flips PDF's bottom-left origin to the IR's
@@ -86,9 +102,10 @@ pub(crate) fn extract_page(
     let resources = pdf.page_resources(page_id).unwrap_or_default();
     let fonts = build_fonts_from_resources(pdf, &resources);
     let mut warned_cid = false;
+    let mut forms: FormCache = HashMap::new();
     run_stream(
         pdf, &bytes, &fonts, &resources, GraphicsState::default(),
-        &mut out, page_height, page_index, &mut warned_cid, 0,
+        &mut out, page_height, page_index, &mut warned_cid, &mut forms, 0,
     );
     out
 }
@@ -107,8 +124,16 @@ fn run_stream(
     page_height: f32,
     page_index: u32,
     warned_cid: &mut bool,
+    forms: &mut FormCache,
     depth: u8,
 ) {
+    // Resolve this stream's /XObject subdictionary once (not per `Do`), so looking up
+    // a form by name is a cheap dict lookup even when it's invoked thousands of times.
+    let xobject_dict: Option<Dictionary> = resources
+        .get(b"XObject")
+        .ok()
+        .and_then(|o| pdf.resolve(o))
+        .and_then(|o| o.as_dict().ok().cloned());
     let mut stack: Vec<GraphicsState> = Vec::new();
     let mut path = Path::default();
     // Path geometry is buffered until the painting op: only *stroked* paths become
@@ -246,15 +271,29 @@ fn run_stream(
             // form (Canva/PDFium/design tools wrap the whole page this way) is
             // extracted instead of silently dropped.
             "Do" if depth < 12 => {
-                if let Some((fbytes, fres, fmat)) = resolve_form_xobject(pdf, resources, a.first()) {
-                    let mut child = st.clone();
-                    child.ctm = mul(fmat, st.ctm);
-                    let child_res = fres.unwrap_or_else(|| resources.clone());
-                    let child_fonts = build_fonts_from_resources(pdf, &child_res);
-                    run_stream(
-                        pdf, &fbytes, &child_fonts, &child_res, child,
-                        out, page_height, page_index, warned_cid, depth + 1,
-                    );
+                // Resolve → decode → build fonts once per unique form, then reuse.
+                if let Some(id) = name_bytes(a.first())
+                    .as_deref()
+                    .and_then(|n| xobject_dict.as_ref()?.get(n).ok()?.as_reference().ok())
+                {
+                    let cached = forms
+                        .entry(id)
+                        .or_insert_with(|| {
+                            resolve_form_stream(pdf, id).map(|(bytes, fres, matrix)| {
+                                let resources = fres.unwrap_or_else(|| resources.clone());
+                                let fonts = build_fonts_from_resources(pdf, &resources);
+                                Rc::new(CachedForm { bytes, fonts, resources, matrix })
+                            })
+                        })
+                        .clone();
+                    if let Some(cf) = cached {
+                        let mut child = st.clone();
+                        child.ctm = mul(cf.matrix, st.ctm);
+                        run_stream(
+                            pdf, &cf.bytes, &cf.fonts, &cf.resources, child,
+                            out, page_height, page_index, warned_cid, forms, depth + 1,
+                        );
+                    }
                 }
             }
             _ => {}
@@ -426,17 +465,10 @@ fn build_fonts_from_resources(pdf: &PdfDoc<'_>, res: &Dictionary) -> BTreeMap<Ve
     map
 }
 
-/// Resolve a `Do` operand to a form XObject: `(decoded content, its /Resources, its
-/// /Matrix)`. Returns `None` for image XObjects — they carry no extractable text.
-fn resolve_form_xobject(
-    pdf: &PdfDoc<'_>,
-    resources: &Dictionary,
-    name_op: Option<&Operand>,
-) -> Option<(Vec<u8>, Option<Dictionary>, [f32; 6])> {
-    let name = name_bytes(name_op)?;
-    let xobjs = pdf.resolve(resources.get(b"XObject").ok()?)?;
-    let xobjs = xobjs.as_dict().ok()?;
-    let stream_obj = pdf.resolve(xobjs.get(&name).ok()?)?;
+/// Resolve a form XObject by id to `(decoded content, its /Resources, its /Matrix)`.
+/// Returns `None` for image XObjects — they carry no extractable text.
+fn resolve_form_stream(pdf: &PdfDoc<'_>, id: ObjectId) -> Option<(Vec<u8>, Option<Dictionary>, [f32; 6])> {
+    let stream_obj = pdf.resolve(&Object::Reference(id))?;
     let Object::Stream(s) = &stream_obj else {
         return None;
     };
